@@ -4,6 +4,39 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
+## [Unreleased]
+
+Output-correctness and robustness round from the 2026-10-12 review
+(`docs/ai/reviews/2026-10-12-review.md`).
+
+- **Rotated pages keep all of their artwork.** A source page carrying `/Rotate 90` or `270` —
+  including one turned by Laydown's own Rotate Pages step — was imposed with part of its
+  artwork cropped away, because the page boxes (unrotated) were intersected with the rotated
+  page. The working copy is now normalised in memory before any box is read or page placed,
+  with Trim/Bleed/Crop/Art boxes carried across; the file on disk is never touched. Pinned by
+  `tests/test_rotation.py`.
+- **Preflight checks the job that will actually be imposed** — page range and preprocessors
+  applied, every page inspected, boxes compared correctly on rotated pages — and now warns when
+  pages are being *enlarged* to fill their cell (the old "full size unless they have to shrink"
+  text was wrong), when bleed is wider than half the gutter or set on a booklet fold, when a
+  custom-mark PDF is missing, and when the source has annotations or form fields; an encrypted
+  source is an error instead of an exception.
+- **Failures are visible and exports are safe.** A crash inside preflight now shows as a
+  "Preflight could not run" error instead of a clean-looking job; a password-protected PDF gets
+  a plain message (owner-password-only, print-permitted PDFs still open normally); export writes
+  to a temporary file beside the target and replaces it only on success, and refuses to
+  overwrite the source PDF; loading a preset starts from the defaults rather than the current
+  settings.
+- **The preview no longer eats memory on large jobs or freezes on a settings change.** Total
+  preview raster memory is capped (512 MB; the render resolution drops for very large jobs,
+  never below 36 DPI), sheets are rasterised as images off the GUI thread, and a new settings
+  change cancels the previous render instead of waiting for it.
+- **Release builds are reproducible and fail loudly.** CI installs an exact, pinned build
+  toolchain (`packaging/constraints.txt`); the PyMuPDF floor is raised to 1.28.0 (older bundled
+  MuPDF builds carry CVE-2026-3308 and CVE-2026-25556); GitHub Actions moved to their Node 24
+  majors; a tag build without the stable signing certificate now stops instead of minting a
+  throwaway one, and the Windows job fails if no MSIX was produced.
+
 ## [0.4.5] — 2026-07-19
 
 - **Windows taskbar-icon hardening.** A blank-taskbar-icon report led here; the reported blank
