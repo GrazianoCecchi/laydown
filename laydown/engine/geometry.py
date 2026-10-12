@@ -95,13 +95,27 @@ def cell_grid(project: Project, cols: int, rows: int) -> List[fitz.Rect]:
 # ── source boxes ─────────────────────────────────────
 
 def _raw_box(page: fitz.Page, which: SourceBox) -> fitz.Rect:
+    """
+    The requested box, in the page's visual (rotated) space.
+
+    PyMuPDF's box getters report UNROTATED coordinates while ``page.rect`` is the
+    rotated page, so on a /Rotate page the two live in different spaces and
+    intersecting them (``source_boxes`` does) silently crops artwork. Mapping
+    through ``rotation_matrix`` puts the box where the page is actually seen;
+    it is the identity for unrotated pages.
+    """
     if which == SourceBox.MEDIA:
-        return page.mediabox
-    if which == SourceBox.CROP:
-        return page.cropbox
-    if which == SourceBox.BLEED:
-        return page.bleedbox
-    return page.trimbox
+        box = page.mediabox
+    elif which == SourceBox.CROP:
+        box = page.cropbox
+    elif which == SourceBox.BLEED:
+        box = page.bleedbox
+    else:
+        box = page.trimbox
+
+    if page.rotation:
+        box = box * page.rotation_matrix
+    return box
 
 
 def source_boxes(page: fitz.Page, source: SourceSettings) -> Tuple[fitz.Rect, fitz.Rect]:
