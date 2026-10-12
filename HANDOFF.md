@@ -4,7 +4,7 @@ Everything a person (or agent) needs to pick this project up. For *why* the code
 way it is, read `AGENTS.md` then `docs/ai/START_HERE.md`; this file is the operational state —
 what's shipped, what's pending, and how to move each piece forward.
 
-_Last updated: 2026-07-19, at version 0.4.5._
+_Last updated: 2026-10-12, at version 0.4.5 (unreleased fixes on `dev` — see CHANGELOG `[Unreleased]`)._
 
 ---
 
@@ -47,14 +47,17 @@ The tag fires `.github/workflows/release.yml`:
 - Build toolchain is pinned in `packaging/constraints.txt` (every CI build installs with `-c`).
   PyMuPDF floor is 1.28.0. A tag build without the `LAYDOWN_CERT_PFX_B64` secret now fails instead
   of minting a throwaway certificate. The Windows job fails if no MSIX was produced.
+- **Before the next tag, dry-run the pipeline** (the pins and action majors changed on 2026-10-12):
+  `gh workflow run release.yml --repo danielmevit/laydown --ref dev -f windows_only=true`, then a
+  full dispatch, and check every platform built before tagging.
 
-**Watch a run:** `gh run list --repo DanielMevit/laydown` / `gh run view <id>`.
+**Watch a run:** `gh run list --repo danielmevit/laydown` / `gh run view <id>`.
 
 **Known:** there is no 32-bit Windows build — PyQt6 ships no `win32` wheel (see `docs/ai/GOTCHAS.md`).
 
 ---
 
-## 3. Distribution channel B — Microsoft Store (Windows) — **PENDING REVIEW**
+## 3. Distribution channel B — Microsoft Store (Windows) — **STATUS UNVERIFIED (owner: check Partner Center)**
 
 Submitted **2026-07-18**. As of 2026-10-12 the outcome is **UNVERIFIED** (no public listing
 found). The owner must check Partner Center. Certification for a full-trust app can take longer

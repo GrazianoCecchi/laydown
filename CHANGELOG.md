@@ -37,6 +37,11 @@ Output-correctness and robustness round from the 2026-10-12 review
   capped at half the gutter, the fold side at half the gutter and at the fold itself, and crept
   content is clipped at the fold (as it would be on press) — with or without bleed set. Trim
   rects and crop marks do not move. Pinned by pixel-sampling tests.
+- **Docs match the code again.** Version and test-count drift removed (docs no longer hard-code
+  a test count), the CLI and the release-pipeline changes are documented, HANDOFF records the Store
+  status as unverified, the AppxManifest carries a `0.0.0.0` placeholder that the build stamps, and
+  GOTCHAS gains the rotated-box, GIL, CRLF and bleed-cap traps. `.gitattributes` now pins LF line
+  endings so Windows and WSL git agree.
 - **Headless command line.** `python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json]
   [--set TARGET=VALUE ...] [--force]` and `python -m laydown preflight SRC.pdf [--json]` run the
   same engine without the GUI (Qt is never loaded). Settings come from the defaults, a preset and
