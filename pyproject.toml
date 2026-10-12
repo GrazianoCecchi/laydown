@@ -17,7 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "PyQt6>=6.4.0",
-    "PyMuPDF>=1.23.0",
+    "PyMuPDF>=1.28.0",
 ]
 
 [project.optional-dependencies]

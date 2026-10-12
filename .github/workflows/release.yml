@@ -36,9 +36,9 @@ jobs:
     name: Windows (x64)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           architecture: x64
@@ -46,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller
+          pip install -e ".[dev]" pyinstaller -c packaging/constraints.txt
 
       - name: Tests
         run: pytest -q
@@ -64,11 +64,19 @@ jobs:
       - name: Restore the MSIX signing certificate
         env:
           PFX_B64: ${{ secrets.LAYDOWN_CERT_PFX_B64 }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
           # (the secrets context is not allowed in a step-level `if:`, so the
           # presence check lives here instead)
           if (-not $env:PFX_B64) {
-            Write-Host "No signing secret available - build.ps1 will mint a throwaway cert"
+            if ($env:GITHUB_REF -like "refs/tags/*") {
+              # A tag build publishes. An MSIX signed by a per-run throwaway cert
+              # is the 0.3.0 failure: the public cert users must trust dies with
+              # the runner and every install gets 0x800B010A. Refuse to build it.
+              Write-Host "::error::Tag build is missing the LAYDOWN_CERT_PFX_B64 secret - refusing to mint a throwaway certificate."
+              exit 1
+            }
+            Write-Host "No signing secret available - build.ps1 will mint a throwaway cert (non-tag build)"
             exit 0
           }
           New-Item -ItemType Directory -Force certs | Out-Null
@@ -80,7 +88,20 @@ jobs:
         env:
           LAYDOWN_CERT_PASSWORD: ${{ secrets.LAYDOWN_CERT_PASSWORD }}
 
-      - uses: actions/upload-artifact@v4
+      # build.ps1 exits 0 without producing an MSIX when the Windows 10 SDK is
+      # missing, and upload-artifact only errors when NO file matches -- so with
+      # the portable ZIP present a release could publish without the installer.
+      # The check belongs here, not in build.ps1: local builds may legitimately
+      # skip the MSIX.
+      - name: Fail if the MSIX is missing
+        run: |
+          if (-not (Get-ChildItem "dist\Laydown-*-windows-x64.msix" -ErrorAction SilentlyContinue)) {
+            Write-Host "::error::No MSIX under dist - build.ps1 skipped it (missing Windows 10 SDK?). A release must not publish without the installer."
+            exit 1
+          }
+          Get-ChildItem "dist\Laydown-*-windows-x64.msix" | Format-List Name, Length
+
+      - uses: actions/upload-artifact@v7
         with:
           name: laydown-windows-x64
           path: |
@@ -96,9 +117,9 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.windows_only) }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -111,7 +132,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller
+          pip install -e ".[dev]" pyinstaller -c packaging/constraints.txt
 
       - name: Tests
         run: xvfb-run -a pytest -q
@@ -127,7 +148,7 @@ jobs:
           tar -xzf dist/Laydown-*-linux-x86_64.tar.gz -C /tmp
           xvfb-run -a /tmp/Laydown-*-linux-x86_64/Laydown --smoke
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: laydown-linux
           path: dist/Laydown-*-linux-x86_64.tar.gz
@@ -152,16 +173,16 @@ jobs:
           - runner: macos-15-intel   # Intel
             arch: x86_64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller
+          pip install -e ".[dev]" pyinstaller -c packaging/constraints.txt
 
       - name: Tests
         run: pytest -q
@@ -174,7 +195,7 @@ jobs:
       - name: Build .dmg
         run: bash packaging/macos/build.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: laydown-macos-${{ matrix.arch }}
           path: dist/Laydown-*-macos-*.dmg
@@ -186,10 +207,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Collect every platform's artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -198,7 +219,7 @@ jobs:
         run: ls -lh artifacts
 
       - name: Publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/*
           fail_on_unmatched_files: true

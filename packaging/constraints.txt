@@ -1,0 +1,23 @@
+# Build toolchain pins. Every CI build job installs with
+#   pip install -e ".[dev]" pyinstaller -c packaging/constraints.txt
+# so Release and Store binaries are reproducible: the exact versions that shipped
+# v0.4.5 and pass the test suite in the owner's venv are the ones that get built,
+# regardless of what is latest on PyPI the day of the release.
+#
+# PyInstaller is deliberately declared ONLY here and on the workflow install line
+# (a build tool, not a runtime dependency). pyproject.toml keeps loose floors for
+# users installing from source; only its PyMuPDF floor is security-driven.
+#
+# Platform caveat: PyQt6-Qt6, PyQt6_sip and PyMuPDF publish per-platform wheels
+# (win_amd64, manylinux, macOS arm64/x86_64). These exact pins must have a wheel
+# for every CI platform; if one is missing, pip fails loudly instead of silently
+# drifting to a different version -- which is the desired behaviour. PyQt6 has
+# no win32 wheel at all (docs/ai/GOTCHAS.md); Windows builds are x64-only.
+
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.1
+PyQt6_sip==13.11.1
+PyMuPDF==1.28.0
+pyinstaller==6.21.0
+pytest==9.1.1
+pytest-qt==4.5.0
