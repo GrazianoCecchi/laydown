@@ -31,6 +31,11 @@ Output-correctness and robustness round from the 2026-10-12 review
   preview raster memory is capped (512 MB; the render resolution drops for very large jobs,
   never below 36 DPI), sheets are rasterised as images off the GUI thread, and a new settings
   change cancels the previous render instead of waiting for it.
+- **Headless command line.** `python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json]
+  [--set TARGET=VALUE ...] [--force]` and `python -m laydown preflight SRC.pdf [--json]` run the
+  same engine without the GUI (Qt is never loaded). Settings come from the defaults, a preset and
+  `--set` overrides (typed by each setting's default); a preflight error blocks the job with exit
+  code 2 unless `--force`; the output is written atomically and can never overwrite the source.
 - **Release builds are reproducible and fail loudly.** CI installs an exact, pinned build
   toolchain (`packaging/constraints.txt`); the PyMuPDF floor is raised to 1.28.0 (older bundled
   MuPDF builds carry CVE-2026-3308 and CVE-2026-25556); GitHub Actions moved to their Node 24
