@@ -9,6 +9,15 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 Output-correctness and robustness round from the 2026-10-12 review
 (`docs/ai/reviews/2026-10-12-review.md`).
 
+- **Pages print at their actual size by default — this changes output for existing jobs.**
+  N-Up and booklet layouts used to scale every page to *fill* its cell, enlarging small pages: a
+  90 x 50 mm business card on an A4 2 x 4 sheet printed at 100 x 55.6 mm, and the Scale Pages step had
+  no visible effect. The new **Page size** setting (Layout ▸ Arrangement) defaults to **Actual size**:
+  pages keep their real dimensions and only shrink when they do not fit (preflight reports it).
+  Choose **Fit to cell** for the old enlarge-to-fill behaviour. Presets saved before this change load
+  as Actual size. Auto-rotate under Actual size only turns a page when that avoids or reduces
+  shrinking. On the command line: `--set layout.scaling=fit`.
+
 - **Rotated pages keep all of their artwork.** A source page carrying `/Rotate 90` or `270` —
   including one turned by Laydown's own Rotate Pages step — was imposed with part of its
   artwork cropped away, because the page boxes (unrotated) were intersected with the rotated
