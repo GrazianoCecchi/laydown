@@ -50,6 +50,7 @@ HONOURED: Set[str] = {
     "layout.rows",
     "layout.cols",
     "layout.auto_rotate",
+    "layout.scaling",
     "layout.booklet_mode",
     "layout.signature_sheets",
     "layout.right_to_left",

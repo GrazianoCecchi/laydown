@@ -12,8 +12,9 @@ import fitz
 import pytest
 
 from laydown.engine.data_model import (
-    LayoutSettings, LayoutType, MarkItem, MarkType, Orientation, PreprocessorStep,
-    PreprocessorType, Project, RotateAngle, SheetSettings, SourceBox, SourceSettings,
+    LayoutSettings, LayoutType, MarkItem, MarkType, Orientation, PageScaling,
+    PreprocessorStep, PreprocessorType, Project, RotateAngle, SheetSettings,
+    SourceBox, SourceSettings,
 )
 from laydown.engine.preflight import Severity, preflight
 from laydown.engine.utils import mm_to_pt
@@ -116,7 +117,7 @@ class TestTheJobAsImposed:
         # Halved A4 pages in an A3 2-up cell are enlarged to ~193%, not printed
         # at the raw document's ~97%.
         src = make_source_pdf(str(tmp_path / "src.pdf"), n_pages=4)
-        project = a_project(src)
+        project = a_project(src, scaling=PageScaling.FIT_TO_CELL)
         project.preprocessors = [
             PreprocessorStep(type=PreprocessorType.SCALE_PAGES, scale_factor=0.5)]
         findings = run_preflight(project, src)
@@ -192,7 +193,7 @@ class TestEnlargement:
         # blown up to 205/90 = 228%.
         src = make_source_pdf(str(tmp_path / "cards.pdf"), n_pages=4,
                               w_mm=90, h_mm=50)
-        findings = run_preflight(a_project(src), src)
+        findings = run_preflight(a_project(src, scaling=PageScaling.FIT_TO_CELL), src)
         enlarged = with_messages(findings, "enlarged")
         assert enlarged and enlarged[0].severity is Severity.WARNING
         assert "228%" in enlarged[0].message

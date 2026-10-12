@@ -25,6 +25,7 @@ from laydown.engine.data_model import (
     BookletMode,
     LayoutSettings,
     LayoutType,
+    PageScaling,
     Project,
     SourceBox,
     SourceSettings,
@@ -143,9 +144,19 @@ def source_boxes(page: fitz.Page, source: SourceSettings) -> Tuple[fitz.Rect, fi
 
 # ── fitting a page into a cell ───────────────────────
 
-def fitted_rect(cell: fitz.Rect, width: float, height: float) -> fitz.Rect:
-    """Where a width×height box lands inside *cell*, fitted and centred."""
-    scale = min(cell.width / width, cell.height / height)
+def fitted_rect(
+    cell: fitz.Rect,
+    width: float,
+    height: float,
+    max_scale: float = math.inf,
+) -> fitz.Rect:
+    """Where a width×height box lands inside *cell*, fitted and centred.
+
+    *max_scale* caps how far the box may be *enlarged* to fill the cell: 1.0
+    keeps it at actual size, shrinking only when it doesn't fit, while the
+    default of no cap fills the cell in both directions.
+    """
+    scale = min(cell.width / width, cell.height / height, max_scale)
     w, h = width * scale, height * scale
     x0 = cell.x0 + (cell.width - w) / 2
     y0 = cell.y0 + (cell.height - h) / 2
@@ -157,9 +168,10 @@ def place_page(
     place: fitz.Rect,
     clip: fitz.Rect,
     allow_rotate: bool = False,
+    scaling: PageScaling = PageScaling.ACTUAL_SIZE,
 ) -> Tuple[fitz.Rect, fitz.Rect, int]:
     """
-    Work out where to draw so that *place* lands exactly on the cell.
+    Work out where to draw so that *place* lands inside the cell.
 
     Returns (target, trim, rotate):
 
@@ -169,19 +181,30 @@ def place_page(
       must follow: a page whose proportions don't match its cell is letterboxed
       inside it, and marking the cell instead is how you get crop marks that miss
       the paper.
-    * *rotate* — 0 or 90. With *allow_rotate*, a page is turned a quarter turn when
-      that fills its cell better, which is what lets landscape artwork sit on a
-      portrait sheet without the operator pre-rotating the file.
+    * *rotate* — 0 or 90. With *allow_rotate*, a page is turned a quarter turn
+      when that fills its cell better (Fit to cell) or when it avoids or reduces
+      shrinking (Actual size, which prefers upright on a tie), which is what lets
+      landscape artwork sit on a portrait sheet without the operator
+      pre-rotating the file.
+    * *scaling* — how the page is sized, from ``layout.scaling`` (default ACTUAL_SIZE).
     """
+    if scaling is None:
+        scaling = PageScaling.ACTUAL_SIZE
+    actual = scaling == PageScaling.ACTUAL_SIZE
+
     rotate = 0
     if allow_rotate:
         upright = min(cell.width / place.width, cell.height / place.height)
         turned = min(cell.width / place.height, cell.height / place.width)
+        if actual:
+            # Turning must pay its way: a page is turned only when that avoids
+            # or reduces shrinking, so one that already fits upright stays put.
+            upright, turned = min(upright, 1.0), min(turned, 1.0)
         if turned > upright:
             rotate = 90
 
     pw, ph = (place.width, place.height) if rotate == 0 else (place.height, place.width)
-    trim = fitted_rect(cell, pw, ph)
+    trim = fitted_rect(cell, pw, ph, max_scale=1.0 if actual else math.inf)
     if clip == place:
         return trim, trim, rotate
 
@@ -202,9 +225,14 @@ def place_page(
     return target, trim, rotate
 
 
-def target_rect(cell: fitz.Rect, place: fitz.Rect, clip: fitz.Rect) -> Tuple[fitz.Rect, fitz.Rect]:
+def target_rect(
+    cell: fitz.Rect,
+    place: fitz.Rect,
+    clip: fitz.Rect,
+    scaling: PageScaling = PageScaling.ACTUAL_SIZE,
+) -> Tuple[fitz.Rect, fitz.Rect]:
     """(target, trim) without rotation. Thin wrapper kept for callers that never turn pages."""
-    target, trim, _ = place_page(cell, place, clip, allow_rotate=False)
+    target, trim, _ = place_page(cell, place, clip, allow_rotate=False, scaling=scaling)
     return target, trim
 
 
