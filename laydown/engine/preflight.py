@@ -224,7 +224,8 @@ def _inspect_document(project: Project, source: fitz.Document) -> List[Finding]:
                 "same way.",
             )]
         pages = [work[i] for i in indices]
-        findings = _check_pages(project, pages)
+        source_pages = [source[i] for i in indices] if len(source) >= len(work) else pages
+        findings = _check_pages(project, pages, source_pages=source_pages)
         findings += _check_fit(project, pages)
         return findings
     finally:
@@ -236,12 +237,15 @@ def _prepared_doc(project: Project, source: fitz.Document):
     """
     (document, to_close) — the source as the preprocessors leave it.
 
-    Rotate and Reorder rewrite pages in place, so when any step is enabled the chain
-    runs on a copy rebuilt from the source's bytes and the caller's document is
-    never touched. With no steps enabled the source is only read, so it is used
-    directly and there is nothing to close.
+    Rotate and Reorder rewrite pages in place, and apply_preprocessors flattens
+    annotations in place. When any preprocessor step is enabled or the source carries
+    annotations/widgets, the chain runs on a copy rebuilt from the source's bytes
+    and the caller's document is never touched. With no steps and no annotations, the
+    source is only read, so it is used directly and there is nothing to close.
     """
-    if not any(step.enabled for step in project.preprocessors):
+    has_steps = any(step.enabled for step in project.preprocessors)
+    has_annots = any(p.first_annot or p.first_widget for p in source)
+    if not has_steps and not has_annots:
         return source, []
     copy = fitz.open("pdf", source.tobytes())
     try:
@@ -287,8 +291,27 @@ def _available_bleed_mm(page: fitz.Page, which: SourceBox) -> float:
     return pt_to_mm(min(p.x0 - r.x0, r.x1 - p.x1, p.y0 - r.y0, r.y1 - p.y1))
 
 
-def _check_pages(project: Project, pages: List[fitz.Page]) -> List[Finding]:
+def _is_printable_annot(annot: fitz.Annot) -> bool:
+    flags = annot.flags
+    is_print = bool(flags & fitz.PDF_ANNOT_IS_PRINT)
+    is_hidden = bool(flags & fitz.PDF_ANNOT_IS_HIDDEN)
+    # Sticky notes ('Text' annot) do not render text into page content
+    return is_print and not is_hidden and annot.type[1] != "Text"
+
+
+def _is_filled_widget(widget: fitz.Widget) -> bool:
+    val = widget.field_value
+    return bool(val is not None and str(val).strip())
+
+
+def _check_pages(
+    project: Project,
+    pages: List[fitz.Page],
+    source_pages: Optional[List[fitz.Page]] = None,
+) -> List[Finding]:
     findings: List[Finding] = []
+    if source_pages is None:
+        source_pages = pages
 
     if project.source.box == SourceBox.TRIM:
         # TrimBox defaults to the CropBox, so an equal pair means "no trim box" —
@@ -330,21 +353,34 @@ def _check_pages(project: Project, pages: List[fitz.Page]) -> List[Finding]:
             "Each page is fitted to its cell individually, so they will not line up.",
         ))
 
-    n_annots = sum(1 for p in pages for _ in p.annots())
-    n_fields = sum(1 for p in pages for _ in p.widgets())
+    n_annots = sum(1 for p in source_pages for _ in p.annots())
+    n_fields = sum(1 for p in source_pages for _ in p.widgets())
     if n_annots or n_fields:
         carried = " and ".join(
             f"{n} {name}{'s' if n != 1 else ''}"
             for n, name in ((n_annots, "annotation"), (n_fields, "form field"))
             if n
         )
-        findings.append(Finding(
-            Severity.WARNING,
-            f"The source carries {carried} that will not appear in the output",
-            "Pages are placed with their printed contents only; annotations and form "
-            "field values are dropped. Flatten them into the page contents first "
-            "(e.g. print-to-PDF) if they must print.",
-        ))
+        has_printable = any(
+            _is_printable_annot(a) for p in source_pages for a in p.annots()
+        ) or any(
+            _is_filled_widget(w) for p in source_pages for w in p.widgets()
+        )
+        if has_printable:
+            findings.append(Finding(
+                Severity.NOTE,
+                f"The source carries {carried} that will be flattened into the output (screen-only ones are left out)",
+                "Printable annotations and filled form fields are flattened into the page "
+                "content; screen-only ones are left out.",
+            ))
+        else:
+            findings.append(Finding(
+                Severity.WARNING,
+                f"The source carries {carried} that will not appear in the output",
+                "Pages are placed with their printed contents only; annotations and form "
+                "field values are dropped. Flatten them into the page contents first "
+                "(e.g. print-to-PDF) if they must print.",
+            ))
 
     return findings
 

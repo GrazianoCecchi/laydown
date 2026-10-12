@@ -20,6 +20,34 @@ from laydown.engine.data_model import (
 )
 
 
+def flatten_annotations_and_forms(doc: fitz.Document) -> None:
+    """
+    Remove annotations that are screen-only or hidden, then bake the rest plus
+    form-field values into the page content stream, in place.
+
+    Documents without annotations or widgets are untouched so byte-identical
+    output is preserved for plain documents.
+    """
+    has_any = any(page.first_annot or page.first_widget for page in doc)
+    if not has_any:
+        return
+
+    for page in doc:
+        to_delete = []
+        for annot in page.annots():
+            is_print = bool(annot.flags & fitz.PDF_ANNOT_IS_PRINT)
+            is_hidden = bool(annot.flags & fitz.PDF_ANNOT_IS_HIDDEN)
+            if not is_print or is_hidden:
+                to_delete.append(annot)
+        for annot in to_delete:
+            page.delete_annot(annot)
+
+        for widget in page.widgets():
+            widget.update()
+
+    doc.bake(annots=True, widgets=True)
+
+
 def apply_preprocessors(
     doc: fitz.Document,
     steps: List[PreprocessorStep],
@@ -30,6 +58,8 @@ def apply_preprocessors(
     Raises ValueError if a step is configured with something that can't be applied —
     a preprocessor must never quietly do nothing.
     """
+    flatten_annotations_and_forms(doc)
+
     current = doc
     ours = False  # whether `current` is an intermediate we must close on replacement
 
