@@ -6,9 +6,12 @@ The settings column is not built here. It is rendered from ``ui/schema.SCHEMA`` 
 the engine doesn't honour fails the test suite rather than the operator's job.
 """
 
+import logging
 import os
 import pathlib
 import sys
+import tempfile
+import traceback
 import webbrowser
 from typing import Optional
 
@@ -26,6 +29,7 @@ from PyQt6.QtWidgets import (
 from laydown import __version__
 from laydown.engine.data_model import LayoutType, Project
 from laydown.engine.impose import impose
+from laydown.engine.preflight import Finding, Severity, preflight
 from laydown.engine.utils import Unit
 from laydown.ui import theme as t
 from laydown.ui.help import tutorials_html
@@ -35,6 +39,19 @@ from laydown.ui.panel import SchemaTab, ValueStore
 from laydown.ui.preprocessors_tab import PreprocessorsTab
 from laydown.ui.preview_panel import SheetCanvas
 from laydown.ui.schema import SCHEMA
+
+_LOG = logging.getLogger(__name__)
+
+
+def _is_same_path(p1: str, p2: str) -> bool:
+    """True when both paths point to the same filesystem target."""
+    if not p1 or not p2:
+        return False
+    try:
+        return os.path.normcase(os.path.realpath(p1)) == os.path.normcase(os.path.realpath(p2))
+    except Exception:
+        return False
+
 
 _APP_TITLE = "Laydown"
 _MAX_RECENT = 8
@@ -134,17 +151,48 @@ class _ExportWorker(QThread):
         self._cancel = True
 
     def run(self):
+        if not self._project or not self._output:
+            self.failed.emit("No project or output path specified")
+            return
+        if self._project.source_pdf_path and _is_same_path(self._project.source_pdf_path, self._output):
+            self.failed.emit("Cannot overwrite source PDF")
+            return
+
+        temp_path: Optional[str] = None
         try:
+            target_dir = os.path.dirname(os.path.abspath(self._output))
+            if not os.path.isdir(target_dir):
+                raise FileNotFoundError(f"Directory does not exist: {target_dir}")
+
+            fd, temp_path = tempfile.mkstemp(
+                prefix=f".{os.path.basename(self._output)}.",
+                suffix=".tmp",
+                dir=target_dir,
+            )
+            os.close(fd)
+
             def report(current, total):
                 if self._cancel:
                     raise _Cancelled()
                 self.progress.emit(current, total)
-            self.done.emit(impose(self._project, self._output, progress_callback=report),
-                           self._output)
+
+            sheets = impose(self._project, temp_path, progress_callback=report)
+            if self._cancel:
+                raise _Cancelled()
+
+            os.replace(temp_path, self._output)
+            temp_path = None
+            self.done.emit(sheets, self._output)
         except _Cancelled:
             self.failed.emit("Export cancelled")
         except Exception as exc:
             self.failed.emit(str(exc))
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
 
 
 class _Cancelled(Exception):
@@ -391,14 +439,18 @@ class MainWindow(QMainWindow):
         return self._preflight_bar
 
     def _run_preflight(self):
-        from laydown.engine.preflight import Severity, preflight
-
         self._findings = []
-        if self._source_path:
-            try:
-                self._findings = preflight(self.build_project(), self._source_doc)
-            except Exception:
-                self._findings = []  # never let a check break the app it is checking
+        try:
+            self._findings = preflight(self.build_project(), self._source_doc)
+        except Exception as exc:
+            _LOG.exception("Preflight could not run: %s", exc)
+            self._findings = [
+                Finding(
+                    Severity.ERROR,
+                    f"Preflight could not run: {exc}",
+                    detail=traceback.format_exc(),
+                )
+            ]
 
         # The strip is for things that need doing something about. Notes are true but
         # not urgent; they stay in Details (Help > Preflight) rather than sitting on
@@ -609,6 +661,26 @@ class MainWindow(QMainWindow):
         try:
             import fitz
             doc = fitz.open(path)
+            if doc.is_encrypted:
+                doc.close()
+                self._close_source_doc()
+                self._source_path = ""
+                self._update_title()
+                for widget in (self._act_close, self._act_generate, self._generate):
+                    widget.setEnabled(False)
+                self._canvas.clear_all()
+                msg = "This PDF is password-protected — remove the password and open it again"
+                self._findings = [Finding(Severity.ERROR, msg)]
+                self._status.showMessage(msg)
+                self._preflight_bar.setStyleSheet(
+                    f"#preflight {{ background: {t.RAISED}; border-bottom: 1px solid {t.DESTRUCTIVE}; }}")
+                self._preflight_text.setText(
+                    f"<span style='color:{t.DESTRUCTIVE}'><b>Error</b></span> "
+                    f"<span style='color:{t.FG}'>{msg}</span>"
+                )
+                self._preflight_more.setVisible(False)
+                self._preflight_bar.setVisible(True)
+                return
             count = len(doc)
         except Exception as exc:
             self._status.showMessage(f"Could not open: {exc}")
@@ -739,6 +811,15 @@ class MainWindow(QMainWindow):
 
     # ── export ───────────────────────────────────
 
+    @staticmethod
+    def _is_offscreen() -> bool:
+        app = QApplication.instance()
+        if app is not None and app.platformName() == "offscreen":
+            return True
+        if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+            return True
+        return False
+
     def _on_export(self):
         if not self._source_path:
             return
@@ -753,6 +834,20 @@ class MainWindow(QMainWindow):
         if not path:
             return
 
+        self.export_to(path)
+
+    def export_to(self, path: str) -> bool:
+        """Export the current project to *path* atomically.
+
+        Returns False if the export cannot proceed (e.g. attempting to overwrite source).
+        """
+        if not self._source_path:
+            return False
+        if _is_same_path(self._source_path, path):
+            self._status.showMessage("Cannot overwrite source PDF — choose a different output file")
+            return False
+
+        project = self.build_project()
         self._progress = QProgressDialog("Imposing…", "Cancel", 0, 100, self)
         self._progress.setWindowTitle("Generating")
         self._progress.setWindowModality(Qt.WindowModality.WindowModal)
@@ -761,6 +856,7 @@ class MainWindow(QMainWindow):
         self._generate.setEnabled(False)
         self._export.setup(project, path)
         self._export.start()
+        return True
 
     def _on_export_progress(self, current, total):
         if not self._progress:
@@ -783,13 +879,14 @@ class MainWindow(QMainWindow):
     def _on_export_done(self, sheets, path):
         self._close_progress()
         self._status.showMessage(f"Exported {sheets} sheet(s) → {os.path.basename(path)}")
-        QMessageBox.information(self, "Export complete",
-                                f"Wrote {sheets} sheet(s) to:\n{path}")
+        if not self._is_offscreen():
+            QMessageBox.information(self, "Export complete",
+                                    f"Wrote {sheets} sheet(s) to:\n{path}")
 
     def _on_export_failed(self, message):
         self._close_progress()
         self._status.showMessage(message)
-        if message != "Export cancelled":
+        if message != "Export cancelled" and not self._is_offscreen():
             QMessageBox.critical(self, "Export failed", message)
 
     # ── help ─────────────────────────────────────
