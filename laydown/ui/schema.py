@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Callable, Optional, Sequence, Tuple
 
 from laydown.engine.data_model import (
-    BookletMode, LayoutType, Orientation, SourceBox, SHEET_PRESETS_MM,
+    BookletMode, LayoutType, Orientation, PageScaling, SourceBox, SHEET_PRESETS_MM,
 )
 
 
@@ -170,6 +170,18 @@ SCHEMA: Tuple[Tab, ...] = (
                             "landscape artwork on a portrait sheet."
                         ),
                         visible_when=_IS_NUP,
+                    ),
+                    Control(
+                        type=ControlType.SEGMENTED,
+                        target="layout.scaling",
+                        label="Page size",
+                        default=PageScaling.ACTUAL_SIZE,
+                        description=(
+                            "Actual size prints each page at 100%, shrinking it only when "
+                            "it doesn't fit the cell. Fit to cell scales to fill the cell, "
+                            "which enlarges pages smaller than it."
+                        ),
+                        options=_enum_options(PageScaling),
                     ),
                 ),
             ),

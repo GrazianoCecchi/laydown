@@ -116,6 +116,19 @@ class BookletMode(Enum):
     PERFECT_BOUND = "Perfect Bound"
 
 
+class PageScaling(Enum):
+    """
+    How a source page is sized inside its cell.
+
+    ACTUAL_SIZE prints at 100% and shrinks a page only when it doesn't fit its
+    cell — the press default, because a page enlarged to fill its cell comes
+    out at a size nobody asked for. FIT_TO_CELL scales to fill the cell in
+    both directions, which is the tool for ganging same-shaped artwork.
+    """
+    ACTUAL_SIZE = "Actual size"
+    FIT_TO_CELL = "Fit to cell"
+
+
 @dataclass
 class LayoutSettings:
     layout_type: LayoutType = LayoutType.NUP
@@ -125,6 +138,9 @@ class LayoutSettings:
     rows: int = 0
     cols: int = 0
     auto_rotate: bool = False  # turn a page 90° when that fits its cell better
+
+    # Sizing (see PageScaling): shrink to fit by default, fill only on request.
+    scaling: PageScaling = PageScaling.ACTUAL_SIZE
 
     # Booklet
     booklet_mode: BookletMode = BookletMode.SADDLE_STITCH
