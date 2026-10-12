@@ -135,7 +135,11 @@ class ValueStore(QObject):
     def load(self, values: dict, *, record: bool = True) -> None:
         if record:
             self._push_undo()
-        self._values.update(copy.deepcopy(values))
+        base = defaults()
+        base["preprocessors"] = []
+        base["marks"] = []
+        base.update(copy.deepcopy(values))
+        self._values = base
         self.changed.emit()
 
     # -- history
