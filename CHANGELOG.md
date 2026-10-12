@@ -31,6 +31,12 @@ Output-correctness and robustness round from the 2026-10-12 review
   preview raster memory is capped (512 MB; the render resolution drops for very large jobs,
   never below 36 DPI), sheets are rasterised as images off the GUI thread, and a new settings
   change cancels the previous render instead of waiting for it.
+- **Bleed and creep stay on their own page.** A page's bleed used to print over the neighbouring
+  page's live area whenever the gutter was narrower than the bleed, and across a booklet's fold;
+  booklet creep could push a page's artwork over the facing page. Bleed facing another cell is now
+  capped at half the gutter, the fold side at half the gutter and at the fold itself, and crept
+  content is clipped at the fold (as it would be on press) — with or without bleed set. Trim
+  rects and crop marks do not move. Pinned by pixel-sampling tests.
 - **Headless command line.** `python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json]
   [--set TARGET=VALUE ...] [--force]` and `python -m laydown preflight SRC.pdf [--json]` run the
   same engine without the GUI (Qt is never loaded). Settings come from the defaults, a preset and
