@@ -42,6 +42,13 @@ Output-correctness and robustness round from the 2026-10-12 review
   status as unverified, the AppxManifest carries a `0.0.0.0` placeholder that the build stamps, and
   GOTCHAS gains the rotated-box, GIL, CRLF and bleed-cap traps. `.gitattributes` now pins LF line
   endings so Windows and WSL git agree.
+- **Printer's marks are press-correct.** Crop, gap-crop, registration, folding, perforation and
+  collating marks now print in the **Registration** colour (`/Separation /All`), so they appear on
+  every plate instead of only black; the colour bar is true DeviceCMYK process solids (C, M, Y, K
+  and the overprints) instead of RGB; no mark is drawn in RGB any more. The Text Label's custom
+  text is now used (it was offered in the Marks tab but ignored). The capability contract now
+  classifies every mark and preprocessor field per type, so a control wired to a field the engine
+  ignores fails the build.
 - **Headless command line.** `python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json]
   [--set TARGET=VALUE ...] [--force]` and `python -m laydown preflight SRC.pdf [--json]` run the
   same engine without the GUI (Qt is never loaded). Settings come from the defaults, a preset and
