@@ -9,6 +9,8 @@ starts (`_refs/ai-full-build-recipe.md` §4). Sizes: **S** ≈ a session, **M** 
   vector imposition, multi-sheet preview, MSIX + portable ZIP.
 - **2026-07-14** — AGPL relicense; AI-project standard adopted (AGENTS.md, docs/ai/,
   CodeGraph, `dev` branch); `framer-demo/node_modules` untracked.
+- **2026-10-12** — Version single-sourcing complete (only the AppxManifest placeholder remains,
+  stamped at build); `pressready-voice/` and `_legacy/` removed.
 - **2026-07-14/15 — Phases 1–6 all landed.** See CHANGELOG.md. In short: a ground-truth
   bench harness and 230 tests where there were none; box-aware imposition (v2 imposed the
   MediaBox, so press-ready PDFs were placed wrong and marked wrong); a capability contract
@@ -157,12 +159,12 @@ Each item lands with a bench test, and only then does its schema control come ba
 ## Backlog
 - **Step & Repeat** and **Cut Stack** — of IW's six layout modes these two carry real label/card
   work; Dutch Cut is niche and Shuffle is deprecated even in IW.
-- **CLI / batch / hot folders** — the engine is already Qt-free for exactly this (`DECISIONS.md`),
-  and IW validates the shape: one engine behind a GUI, a console binary, and a plugin.
+- **CLI / batch / hot folders** — the headless CLI landed 2026-10-12 (`laydown impose` and
+  `laydown preflight`); batch / hot folders still open.
 - Barcode marks — one or two symbologies (Code128, DataMatrix), not IW's thirty.
-- Repo hygiene: single-source the version (it's in six places today) · extract `pressready-voice/`
-  (an unrelated tray dictation app living in this repo, and the main reason `git status` takes
-  minutes) · decide `framer-demo/`'s home · delete the untracked `_legacy/` leftover.
+- Repo hygiene: decide `framer-demo/`'s home.
+- **Preview scale** — memory is now bounded (2026-10-12) but viewport-only rendering / reusing
+  the imposed document is still open.
 
 ## Not doing (and why)
 - **Rewriting as a Toolcraft web app.** Toolcraft is React/Vite; Laydown is a shipped desktop

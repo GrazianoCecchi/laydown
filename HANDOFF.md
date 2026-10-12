@@ -17,8 +17,8 @@ _Last updated: 2026-07-19, at version 0.4.5._
 | **Repo** | <https://github.com/danielmevit/laydown> (default branch `main`; work on `dev`, merge to `main` on release) |
 | **Website** | <https://danielmevit.github.io/laydown/> — Astro, in `site/`, deploys from `main` |
 | **GitHub releases** | **0.4.5**, all platforms — Windows (MSIX + portable), macOS (arm64 + Intel), Linux x86_64 |
-| **Microsoft Store** | **Submitted 2026-07-18, IN REVIEW.** Package version 0.4.1. See §3. |
-| **Tests** | 257, run headless anywhere (`pytest`). CI gates every release on them. |
+| **Microsoft Store** | **Submitted 2026-07-18, outcome UNVERIFIED as of 2026-10-12 (no public listing found).** Package version 0.4.1. See §3. |
+| **Tests** | the full suite, run headless anywhere (`pytest`). CI gates every release on them. |
 | **License** | AGPL-3.0-only |
 
 The name was **PressReady** through 0.3.0; renamed to **Laydown** at 0.4.0 to avoid Fujifilm's
@@ -44,6 +44,9 @@ The tag fires `.github/workflows/release.yml`:
 - A single `release` job needs all four, then publishes once. **A partial release is
   impossible**: if any platform fails, nothing publishes and you re-run the job.
 - The Windows MSIX is signed with the stable certificate (see §4), so updates need no re-trust.
+- Build toolchain is pinned in `packaging/constraints.txt` (every CI build installs with `-c`).
+  PyMuPDF floor is 1.28.0. A tag build without the `LAYDOWN_CERT_PFX_B64` secret now fails instead
+  of minting a throwaway certificate. The Windows job fails if no MSIX was produced.
 
 **Watch a run:** `gh run list --repo DanielMevit/laydown` / `gh run view <id>`.
 
@@ -53,9 +56,9 @@ The tag fires `.github/workflows/release.yml`:
 
 ## 3. Distribution channel B — Microsoft Store (Windows) — **PENDING REVIEW**
 
-Submitted **2026-07-18**. As of this handoff it is **in Microsoft's certification queue**. Nothing
-to do but wait; certification for a full-trust app can take longer than the usual 1–3 days because
-a human reviews the `runFullTrust` justification.
+Submitted **2026-07-18**. As of 2026-10-12 the outcome is **UNVERIFIED** (no public listing
+found). The owner must check Partner Center. Certification for a full-trust app can take longer
+than the usual 1–3 days because a human reviews the `runFullTrust` justification.
 
 ### The submission, as filed
 - **Product name:** Laydown (reserved as an **MSIX or PWA app**)
@@ -130,7 +133,9 @@ identity, not `CN=LaydownTeam`. Don't sign the Store package.
 pip install -e ".[dev]"        # PyQt6 + PyMuPDF + pytest
 python -m laydown              # run the app (needs a desktop session)
 python -m laydown --smoke      # headless end-to-end self-check, exits 0/1
-pytest                         # 257 tests, no display needed
+python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json] [--set TARGET=VALUE ...] [--force]  # headless CLI
+python -m laydown preflight SRC.pdf [--preset ...] [--set ...] [--json]  # headless preflight, exit 0/1/2
+pytest                         # the full suite, no display needed
 ```
 
 - **WSL note:** the venv is `~/.venvs/laydown` (D: has no room). The GUI *shows* only on a real

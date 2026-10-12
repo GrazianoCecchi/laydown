@@ -3,12 +3,11 @@
 ## What this is
 Laydown — a desktop app for **PDF imposition** (laying out source pages on press sheets
 for commercial printing). Python 3.10+, PyQt6 UI, PyMuPDF (fitz) engine. Runs on Windows,
-macOS and Linux. Current version **0.4.4**. License: AGPL-3.0-only.
+macOS and Linux. Current version **0.4.5**. License: AGPL-3.0-only.
 
 ## Operational state → `HANDOFF.md`
-For what's shipped and what's pending — GitHub releases (0.4.4, all platforms) and the
-**Microsoft Store submission (in review since 2026-07-18)** — read `HANDOFF.md` at the repo
-root. It has the Store identity, the release/signing procedure, and the next steps.
+For what's shipped and what's pending — GitHub releases (0.4.5, all platforms) and the
+**Microsoft Store submission** — read `HANDOFF.md` at the repo root. It has the Store identity, the release/signing procedure, and the next steps.
 
 ## Current priority
 **2026-10-12 fix round → `docs/ai/reviews/2026-10-12-review.md`** (review findings, owner
@@ -32,7 +31,7 @@ once all platforms pass (no partial releases). The website deploys from `main`.
 
 ## How to run
 - **App:** `pip install -e .` then `python -m laydown`
-- **Tests:** `pip install -e ".[dev]"` then `pytest` — 243 of them, no display needed.
+- **Tests:** `pip install -e ".[dev]"` then `pytest` — the full suite, no display needed.
   In WSL use the venv at `~/.venvs/laydown` (see GOTCHAS).
 - **Self-check:** `python -m laydown --smoke` — headless, end to end, exits 0/1.
 - **Packaging:** `packaging/{windows,linux,macos}/` — each runs on its own OS.
