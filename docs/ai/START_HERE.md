@@ -11,6 +11,9 @@ For what's shipped and what's pending — GitHub releases (0.4.4, all platforms)
 root. It has the Store identity, the release/signing procedure, and the next steps.
 
 ## Current priority
+**2026-10-12 fix round → `docs/ai/reviews/2026-10-12-review.md`** (review findings, owner
+decisions, task status). Output-correctness fixes (rotation, scaling, bleed) come first.
+
 **Renamed from PressReady to Laydown at 0.4.0** (Fujifilm ships "Revoria XMF PressReady" in
 this exact industry). Releases 0.2.0/0.3.0 on the release page carry the old name — history,
 don't rewrite them. Next work: `ROADMAP.md` backlog. All six planned
