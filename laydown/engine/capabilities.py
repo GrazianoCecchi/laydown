@@ -17,12 +17,20 @@ here, and the tests in ``tests/test_capabilities.py`` enforce three rules:
 
 Adding a field to the data model therefore *fails the build* until it is listed.
 Put it in NOT_IMPLEMENTED and the UI is forbidden from offering it.
+
+The list-valued settings — ``marks`` and ``preprocessors`` — get the same law one
+level down, per item type: the ``MARK_*`` / ``PREPROCESSOR_*`` tables below
+classify every field of ``MarkItem`` and ``PreprocessorStep`` *for each mark /
+preprocessor type*. A field the Marks or Preprocessors tab lets the operator
+edit for a type must sit in that type's HONOURED table; the tests read those
+tabs (``ui/marks_tab.py``, ``ui/preprocessors_tab.py``) directly, so wiring a
+control to a field the engine ignores for that type fails the build too.
 """
 
 from dataclasses import fields, is_dataclass
-from typing import Any, Set
+from typing import Any, Dict, Set
 
-from laydown.engine.data_model import Project
+from laydown.engine.data_model import MarkType, PreprocessorType, Project
 
 
 # Settings the engine reads and acts on. The UI may offer these.
@@ -70,9 +78,126 @@ HONOURED: Set[str] = {
 
 # Declared in the model but not implemented. The UI must NOT offer these: a control
 # that cannot do anything is worse than a missing feature, because the operator
-# believes it worked. Move an entry up to HONOURED in the same change that makes the
-# engine read it, never before.
+# believes it worked. Move an entry up to HONOURED in the same change that makes
+# the engine read it, never before.
 NOT_IMPLEMENTED: Set[str] = set()
+
+
+# ── per-item classification ─────────────────────────
+#
+# "marks" / "preprocessors" above classify the lists as a whole; the tables
+# below classify every *field* of every list item, per item type. The same two
+# rules hold one level down: a field appears in exactly one of the two tables
+# for its type, and the tab that edits the list may only edit fields sitting
+# in that type's HONOURED table. Fields are listed explicitly (not derived as
+# a complement) so an unhonoured field is a decision made in public, not a
+# leftover.
+
+
+MARK_HONOURED: Dict[MarkType, Set[str]] = {
+    # mark_type/enabled are read for every item before the type is dispatched.
+    MarkType.CROP_MARKS: {
+        "mark_type", "enabled", "crop_length_mm", "crop_offset_mm", "crop_width_pt",
+    },
+    MarkType.GAP_CROP_MARKS: {
+        "mark_type", "enabled", "crop_offset_mm", "crop_width_pt",
+    },
+    MarkType.TRIM_LINE: {"mark_type", "enabled"},
+    MarkType.REGISTRATION: {"mark_type", "enabled"},
+    MarkType.FOLDING_MARKS: {"mark_type", "enabled", "fold_line_length_mm"},
+    MarkType.PERFORATION_MARKS: {"mark_type", "enabled"},
+    MarkType.COLLATING_MARKS: {"mark_type", "enabled"},
+    MarkType.COLOR_BAR: {"mark_type", "enabled", "patch_size_mm"},
+    MarkType.TEXT_LABEL: {"mark_type", "enabled", "label_text", "label_font_size"},
+    MarkType.CUSTOM_MARK: {
+        "mark_type", "enabled", "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+}
+
+MARK_NOT_IMPLEMENTED: Dict[MarkType, Set[str]] = {
+    MarkType.CROP_MARKS: {
+        "label_text", "label_font_size", "fold_line_length_mm", "patch_size_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    # The Marks tab greys the Length control out for gap crop marks — these run
+    # to the sheet edge and have no length — so it edits nothing unhonoured.
+    MarkType.GAP_CROP_MARKS: {
+        "crop_length_mm", "label_text", "label_font_size", "fold_line_length_mm",
+        "patch_size_mm", "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.TRIM_LINE: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "fold_line_length_mm", "patch_size_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.REGISTRATION: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "fold_line_length_mm", "patch_size_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.FOLDING_MARKS: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "patch_size_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.PERFORATION_MARKS: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "fold_line_length_mm", "patch_size_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.COLLATING_MARKS: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "fold_line_length_mm", "patch_size_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.COLOR_BAR: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "fold_line_length_mm",
+        "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.TEXT_LABEL: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "fold_line_length_mm",
+        "patch_size_mm", "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
+    },
+    MarkType.CUSTOM_MARK: {
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "label_font_size", "fold_line_length_mm", "patch_size_mm",
+    },
+}
+
+
+PREPROCESSOR_HONOURED: Dict[PreprocessorType, Set[str]] = {
+    PreprocessorType.ROTATE_PAGES: {"type", "enabled", "rotate_angle"},
+    PreprocessorType.SCALE_PAGES: {"type", "enabled", "scale_factor"},
+    PreprocessorType.REORDER_PAGES: {"type", "enabled", "page_order"},
+    # The remaining types are declared in the model but the pipeline rejects
+    # them with a ValueError rather than silently running them, so not even
+    # "type" is honoured — enabled is still read before the dispatch.
+    PreprocessorType.CLONE_PAGES: {"enabled"},
+    PreprocessorType.N_PLUS_1_PAGES: {"enabled"},
+    PreprocessorType.SPLIT_PAGES: {"enabled"},
+    PreprocessorType.SHUFFLE_PAGES: {"enabled"},
+    PreprocessorType.RESIZE_PAGES: {"enabled"},
+    PreprocessorType.OVERRIDE_BOX: {"enabled"},
+    PreprocessorType.SETUP_BLEEDS: {"enabled"},
+    PreprocessorType.CENTER_AND_CROP: {"enabled"},
+    PreprocessorType.SLICE_PAGES: {"enabled"},
+}
+
+PREPROCESSOR_NOT_IMPLEMENTED: Dict[PreprocessorType, Set[str]] = {
+    PreprocessorType.ROTATE_PAGES: {"scale_factor", "page_order"},
+    PreprocessorType.SCALE_PAGES: {"rotate_angle", "page_order"},
+    PreprocessorType.REORDER_PAGES: {"rotate_angle", "scale_factor"},
+    PreprocessorType.CLONE_PAGES: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.N_PLUS_1_PAGES: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.SPLIT_PAGES: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.SHUFFLE_PAGES: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.RESIZE_PAGES: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.OVERRIDE_BOX: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.SETUP_BLEEDS: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.CENTER_AND_CROP: {"type", "rotate_angle", "scale_factor", "page_order"},
+    PreprocessorType.SLICE_PAGES: {"type", "rotate_angle", "scale_factor", "page_order"},
+}
 
 
 def _walk(obj: Any, prefix: str = "") -> Set[str]:
