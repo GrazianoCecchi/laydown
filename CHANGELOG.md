@@ -49,6 +49,11 @@ Output-correctness and robustness round from the 2026-10-12 review
   text is now used (it was offered in the Marks tab but ignored). The capability contract now
   classifies every mark and preprocessor field per type, so a control wired to a field the engine
   ignores fails the build.
+- **Printable annotations and filled form fields now print.** They used to be silently dropped
+  (imposition copies a page's contents only). Print-flagged annotations and form-field values are
+  flattened into the page on the working copy before imposing; screen-only and hidden annotations
+  are left out, as a printer would. Preflight says how many will be flattened. The source file is
+  never modified.
 - **Headless command line.** `python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json]
   [--set TARGET=VALUE ...] [--force]` and `python -m laydown preflight SRC.pdf [--json]` run the
   same engine without the GUI (Qt is never loaded). Settings come from the defaults, a preset and
