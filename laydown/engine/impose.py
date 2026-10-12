@@ -16,7 +16,9 @@ import fitz
 from laydown.engine.data_model import Project
 from laydown.engine.geometry import (
     Sheet,
+    bleed_caps,
     booklet_page_order,  # re-exported: callers import it from here
+    clamped_clip,
     margins_pt,
     place_page,
     sheet_plan,
@@ -165,11 +167,27 @@ def _render(
                 place, clip = source_boxes(src_page, project.source)
                 target, trim, rotate = place_page(
                     placement.cell, place, clip, allow_rotate=project.layout.auto_rotate)
+                # Bleed is welcome on bare paper, but never over a
+                # neighbour's live area or across a booklet fold. Each
+                # side is capped in sheet space and the clip shrinks to
+                # match; the place box stays put, so the trim (and the
+                # marks that follow it) do not move. The caps apply with
+                # no bleed too: there the clip starts equal to the place
+                # box, and a negative fold cap — creep pushed the trim
+                # past the fold — is the only thing that can cut in.
+                caps = bleed_caps(project, sheet, placement.cell, trim)
+                clamped = clamped_clip(place, clip, trim, rotate, caps)
+                if clamped != clip:
+                    clip = clamped
+                    target, trim, rotate = place_page(
+                        placement.cell, place, clip,
+                        allow_rotate=project.layout.auto_rotate)
 
-                page.show_pdf_page(
-                    target, src_doc, placement.page_index,
-                    clip=clip, rotate=rotate, keep_proportion=True, overlay=True,
-                )
+                if clip.width > 0 and clip.height > 0 and target.width > 0 and target.height > 0:
+                    page.show_pdf_page(
+                        target, src_doc, placement.page_index,
+                        clip=clip, rotate=rotate, keep_proportion=True, overlay=True,
+                    )
                 # Marks follow the trim rect, not the cell: a page whose proportions
                 # differ from the cell is letterboxed inside it, and crop marks drawn
                 # on the cell would sit off the page edge.

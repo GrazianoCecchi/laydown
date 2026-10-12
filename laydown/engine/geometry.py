@@ -17,6 +17,7 @@ All rects are PDF points in PyMuPDF's top-left coordinate space.
 
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+import math
 
 import fitz
 
@@ -205,6 +206,50 @@ def target_rect(cell: fitz.Rect, place: fitz.Rect, clip: fitz.Rect) -> Tuple[fit
     """(target, trim) without rotation. Thin wrapper kept for callers that never turn pages."""
     target, trim, _ = place_page(cell, place, clip, allow_rotate=False)
     return target, trim
+
+
+def clamped_clip(
+    place: fitz.Rect,
+    clip: fitz.Rect,
+    trim: fitz.Rect,
+    rotate: int,
+    caps: Tuple[float, float, float, float],
+) -> fitz.Rect:
+    """
+    The clip with each side's bleed reduced to its cap, still in source space.
+
+    *caps* is (left, top, right, bottom) in **sheet** points, the same order
+    :func:`place_page` expands the target. A side keeps its current margin
+    unless the cap is smaller; a negative cap therefore cuts into the place
+    box, which is how a crept page is clipped at a fold. The place box itself
+    never moves, so the trim rect — and the crop marks that follow it — are
+    unaffected.
+
+    This also runs with no bleed, where the clip starts equal to the place
+    box: every margin is zero, so only a negative cap (creep past the fold)
+    changes anything.
+    """
+    if all(c == math.inf for c in caps):
+        return clip
+
+    pw = place.width if rotate == 0 else place.height
+    scale = trim.width / pw
+    left, top = place.x0 - clip.x0, place.y0 - clip.y0
+    right, bottom = clip.x1 - place.x1, clip.y1 - place.y1
+    if rotate == 90:
+        # The same side-swap place_page applies: source top -> sheet left, etc.
+        left, top, right, bottom = top, right, bottom, left
+
+    left, top, right, bottom = (
+        min(margin * scale, cap) / scale
+        for margin, cap in zip((left, top, right, bottom), caps)
+    )
+
+    if rotate == 90:
+        # And back: the sheet-left margin came from the source's top, and so on.
+        top, right, bottom, left = left, top, right, bottom
+    return fitz.Rect(
+        place.x0 - left, place.y0 - top, place.x1 + right, place.y1 + bottom)
 
 
 # ── page ordering ────────────────────────────────────
@@ -409,3 +454,50 @@ def _plan_booklet(project: Project, page_indices: List[int]) -> List[Sheet]:
                 fold_x=fold_x,
             ))
     return sheets
+
+
+# ── keeping bleed off the neighbours ────────────────
+
+def bleed_caps(
+    project: Project,
+    sheet: Sheet,
+    cell: fitz.Rect,
+    trim: fitz.Rect,
+) -> Tuple[float, float, float, float]:
+    """
+    Per-side ceiling on how far a placed page's ink may spill past its trim:
+    (left, top, right, bottom) in sheet points, ``math.inf`` for no ceiling.
+
+    Bleed is welcome wherever it lands on bare paper — past a sheet edge or
+    into a margin — but it must never print over a neighbour's live area or
+    across a booklet fold: the neighbour is cut there, so stray ink would show
+    on the finished piece. A side facing another cell is therefore capped at
+    half the gutter between the two, and a booklet's spine side at half the
+    gutter and at the fold itself. The fold cap goes negative when creep has
+    pushed the trim past the fold; the caller then clips into the page, which
+    is how crept content is kept off the facing page.
+    """
+    inf = math.inf
+    if sheet.fold_x is not None:
+        spine = mm_to_pt(project.layout.gutter_h_mm) / 2
+        if (cell.x0 + cell.x1) / 2 < sheet.fold_x:  # left page: spine on its right
+            return (inf, inf, min(spine, sheet.fold_x - trim.x1), inf)
+        return (min(spine, trim.x0 - sheet.fold_x), inf, inf, inf)
+
+    cols, rows = grid_for(project.layout)
+    col = row = None
+    for i, c in enumerate(cell_grid(project, cols, rows)):
+        if abs(c.x0 - cell.x0) < 0.1 and abs(c.y0 - cell.y0) < 0.1:
+            col, row = i % cols, i // cols
+            break
+    if col is None:  # not a grid cell: nothing known to collide with
+        return (inf, inf, inf, inf)
+
+    gh = mm_to_pt(project.layout.gutter_h_mm) / 2
+    gv = mm_to_pt(project.layout.gutter_v_mm) / 2
+    return (
+        gh if col > 0 else inf,
+        gv if row > 0 else inf,
+        gh if col < cols - 1 else inf,
+        gv if row < rows - 1 else inf,
+    )
