@@ -169,6 +169,11 @@ def run_smoke() -> int:
 
 
 def main(argv=None) -> int:
+    effective_argv = sys.argv[1:] if argv is None else list(argv)
+    if effective_argv and effective_argv[0] in ("impose", "preflight"):
+        from laydown.cli import main as cli_main
+        return cli_main(effective_argv)
+
     args = _build_parser().parse_args(argv)
     if args.smoke:
         return run_smoke()
