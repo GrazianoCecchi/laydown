@@ -24,7 +24,7 @@ from typing import List, Optional
 
 import fitz
 
-from laydown.engine.data_model import LayoutType, MarkType, Project, SourceBox
+from laydown.engine.data_model import LayoutType, MarkType, PageScaling, Project, SourceBox
 from laydown.engine.geometry import cell_grid, grid_for, source_boxes
 from laydown.engine.preprocessors import apply_preprocessors
 from laydown.engine.utils import mm_to_pt, parse_page_range, pt_to_mm
@@ -412,9 +412,10 @@ def _check_fit(project: Project, pages: List[fitz.Page]) -> List[Finding]:
     wastes = []
     for page in pages:
         place, _ = source_boxes(page, project.source)
-        scale = min(cell.width / place.width, cell.height / place.height)
+        fit = min(cell.width / place.width, cell.height / place.height)
         if layout.auto_rotate:
-            scale = max(scale, min(cell.width / place.height, cell.height / place.width))
+            fit = max(fit, min(cell.width / place.height, cell.height / place.width))
+        scale = min(1.0, fit) if layout.scaling == PageScaling.ACTUAL_SIZE else fit
         scales.append(scale)
         wastes.append(
             1.0 - (place.width * scale * place.height * scale) / (cell.width * cell.height)
@@ -422,7 +423,7 @@ def _check_fit(project: Project, pages: List[fitz.Page]) -> List[Finding]:
 
     biggest, smallest = max(scales), min(scales)
 
-    if biggest > 1.001:
+    if layout.scaling == PageScaling.FIT_TO_CELL and biggest > 1.001:
         findings.append(Finding(
             Severity.WARNING,
             f"Pages are being enlarged to {biggest * 100:.0f}% to fill their cell",

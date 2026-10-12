@@ -166,7 +166,10 @@ def _render(
                 src_page = src_doc[placement.page_index]
                 place, clip = source_boxes(src_page, project.source)
                 target, trim, rotate = place_page(
-                    placement.cell, place, clip, allow_rotate=project.layout.auto_rotate)
+                    placement.cell, place, clip,
+                    allow_rotate=project.layout.auto_rotate,
+                    scaling=project.layout.scaling,
+                )
                 # Bleed is welcome on bare paper, but never over a
                 # neighbour's live area or across a booklet fold. Each
                 # side is capped in sheet space and the clip shrinks to
@@ -181,7 +184,9 @@ def _render(
                     clip = clamped
                     target, trim, rotate = place_page(
                         placement.cell, place, clip,
-                        allow_rotate=project.layout.auto_rotate)
+                        allow_rotate=project.layout.auto_rotate,
+                        scaling=project.layout.scaling,
+                    )
 
                 if clip.width > 0 and clip.height > 0 and target.width > 0 and target.height > 0:
                     page.show_pdf_page(

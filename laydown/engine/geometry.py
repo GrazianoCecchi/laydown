@@ -73,22 +73,6 @@ def grid_for(layout) -> Tuple[int, int]:
         ) from None
 
 
-class Cell(fitz.Rect):
-    """
-    A placement cell that also knows how its occupant is to be scaled.
-
-    ``cell_grid`` stamps the project's ``layout.scaling`` onto the cells it
-    builds, because the placement maths (:func:`place_page`) is driven by
-    impose.py, which hands it the cell but not the layout. A plain
-    ``fitz.Rect`` cell places at Actual size, which is the model default.
-    """
-
-    def __init__(self, *args, scaling: PageScaling = PageScaling.ACTUAL_SIZE,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-        self.scaling = scaling
-
-
 def cell_grid(project: Project, cols: int, rows: int) -> List[fitz.Rect]:
     """The cols×rows cells of a sheet, in reading order."""
     sheet_w, sheet_h = sheet_size_pt(project)
@@ -106,8 +90,7 @@ def cell_grid(project: Project, cols: int, rows: int) -> List[fitz.Rect]:
         col, row = i % cols, i // cols
         x0 = ml + col * (cell_w + gh)
         y0 = mt + row * (cell_h + gv)
-        cells.append(Cell(x0, y0, x0 + cell_w, y0 + cell_h,
-                          scaling=project.layout.scaling))
+        cells.append(fitz.Rect(x0, y0, x0 + cell_w, y0 + cell_h))
     return cells
 
 
@@ -185,7 +168,7 @@ def place_page(
     place: fitz.Rect,
     clip: fitz.Rect,
     allow_rotate: bool = False,
-    scaling: Optional[PageScaling] = None,
+    scaling: PageScaling = PageScaling.ACTUAL_SIZE,
 ) -> Tuple[fitz.Rect, fitz.Rect, int]:
     """
     Work out where to draw so that *place* lands inside the cell.
@@ -203,11 +186,10 @@ def place_page(
       shrinking (Actual size, which prefers upright on a tie), which is what lets
       landscape artwork sit on a portrait sheet without the operator
       pre-rotating the file.
-    * *scaling* — how the page is sized, from ``layout.scaling``. Cells made by
-      the plan carry it already; a plain rect places at Actual size.
+    * *scaling* — how the page is sized, from ``layout.scaling`` (default ACTUAL_SIZE).
     """
     if scaling is None:
-        scaling = getattr(cell, "scaling", PageScaling.ACTUAL_SIZE)
+        scaling = PageScaling.ACTUAL_SIZE
     actual = scaling == PageScaling.ACTUAL_SIZE
 
     rotate = 0
@@ -247,7 +229,7 @@ def target_rect(
     cell: fitz.Rect,
     place: fitz.Rect,
     clip: fitz.Rect,
-    scaling: Optional[PageScaling] = None,
+    scaling: PageScaling = PageScaling.ACTUAL_SIZE,
 ) -> Tuple[fitz.Rect, fitz.Rect]:
     """(target, trim) without rotation. Thin wrapper kept for callers that never turn pages."""
     target, trim, _ = place_page(cell, place, clip, allow_rotate=False, scaling=scaling)
@@ -453,9 +435,7 @@ def _plan_nup(project: Project, page_indices: List[int]) -> List[Sheet]:
 
 
 def _shifted(cell: fitz.Rect, dx: float) -> fitz.Rect:
-    # A creep shift moves the cell; the scaling it carries must travel with it.
-    return Cell(cell.x0 + dx, cell.y0, cell.x1 + dx, cell.y1,
-                scaling=getattr(cell, "scaling", PageScaling.ACTUAL_SIZE))
+    return fitz.Rect(cell.x0 + dx, cell.y0, cell.x1 + dx, cell.y1)
 
 
 def _plan_booklet(project: Project, page_indices: List[int]) -> List[Sheet]:

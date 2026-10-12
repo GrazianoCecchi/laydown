@@ -9,6 +9,7 @@ import pytest
 
 from laydown.engine.data_model import (
     Project, LayoutSettings, LayoutType, SheetSettings, Orientation, BookletMode,
+    PageScaling,
 )
 from laydown.engine.geometry import (
     booklet_page_order, grid_for, padded_slots, signature_groups, creep_shift_pt,
@@ -106,7 +107,8 @@ class TestAutoRotate:
         cell = fitz.Rect(0, 0, 400, 200)        # wide cell, so turning genuinely wins
         place = fitz.Rect(20, 5, 120, 205)      # 100 × 200, tall
         clip = fitz.Rect(0, 0, 130, 210)        # left 20, top 5, right 10, bottom 5
-        target, trim, rotate = place_page(cell, place, clip, allow_rotate=True)
+        target, trim, rotate = place_page(
+            cell, place, clip, allow_rotate=True, scaling=PageScaling.FIT_TO_CELL)
 
         assert rotate == 90, "a tall page in a wide cell should turn"
         assert target.width / target.height == pytest.approx(clip.height / clip.width), (

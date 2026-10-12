@@ -22,8 +22,9 @@ from laydown.engine.data_model import (
     Project,
     SheetSettings,
 )
-from laydown.engine.geometry import Cell, place_page
+from laydown.engine.geometry import place_page
 from laydown.engine.impose import impose_detailed
+from laydown.engine.preflight import Severity, preflight
 from laydown.engine.utils import mm_to_pt
 from laydown.ui.presets import save_preset
 from laydown.ui.schema import defaults
@@ -114,14 +115,14 @@ class TestAutoRotateAtActualSize:
     # An A4-portrait 2x4 cell: 100 x 71.75 mm.
     CELL_WH_MM = (100.0, 71.75)
 
-    def _cell(self, scaling):
+    def _cell(self):
         w, h = (mm_to_pt(v) for v in self.CELL_WH_MM)
-        return Cell(0, 0, w, h, scaling=scaling)
+        return fitz.Rect(0, 0, w, h)
 
     def _place(self, w_mm, h_mm, scaling):
         w, h = mm_to_pt(w_mm), mm_to_pt(h_mm)
         place = fitz.Rect(0, 0, w, h)
-        return place_page(self._cell(scaling), place, place, allow_rotate=True)
+        return place_page(self._cell(), place, place, allow_rotate=True, scaling=scaling)
 
     def test_a_page_that_fits_upright_is_not_turned(self):
         # Landscape card, upright fit 111% -> capped at 100%. Turned it would
@@ -144,10 +145,10 @@ class TestAutoRotateAtActualSize:
 
     def test_fit_to_cell_still_turns_to_fill_better(self):
         # The old rule, unchanged under the opt-in: turn when that fills more.
-        # Upright fit 111% vs turned 143%.
-        target, trim, rotate = self._place(90, 50, PageScaling.FIT_TO_CELL)
+        # For a 35x50 mm card in a 100x71.75 mm cell: upright fit 143.5% vs turned 200%.
+        target, trim, rotate = self._place(35, 50, PageScaling.FIT_TO_CELL)
         assert rotate == 90
-        assert (mm(trim.width), mm(trim.height)) == pytest.approx((100.0, 71.75), abs=0.1)
+        assert (mm(trim.width), mm(trim.height)) == pytest.approx((100.0, 70.0), abs=0.1)
 
 
 class TestBleedAtActualSize:
@@ -158,9 +159,8 @@ class TestBleedAtActualSize:
         b = mm_to_pt(3)
         place = fitz.Rect(0, 0, w, h)
         clip = fitz.Rect(-b, -b, w + b, h + b)
-        cell = Cell(0, 0, mm_to_pt(100), mm_to_pt(71.75),
-                    scaling=PageScaling.ACTUAL_SIZE)
-        target, trim, rotate = place_page(cell, place, clip)
+        cell = fitz.Rect(0, 0, mm_to_pt(100), mm_to_pt(71.75))
+        target, trim, rotate = place_page(cell, place, clip, scaling=PageScaling.ACTUAL_SIZE)
         assert rotate == 0
         assert (mm(trim.width), mm(trim.height)) == pytest.approx((90.0, 50.0), abs=0.1)
         assert (mm(target.width), mm(target.height)) == pytest.approx((96.0, 56.0), abs=0.1)
@@ -185,7 +185,7 @@ class TestBooklet:
         p.layout = LayoutSettings(
             layout_type=LayoutType.BOOKLET, scaling=PageScaling.FIT_TO_CELL)
         w, h = first_trim(p, out_path())
-        assert (w, h) == pytest.approx((143.5, 202.3), abs=0.1)
+        assert (w, h) == pytest.approx((141.9, 200.0), abs=0.1)
 
 
 class TestPresets:
@@ -223,7 +223,7 @@ class TestCLI:
         xs1 = [d["rect"].x1 for d in page.get_drawings()]
         ys1 = [d["rect"].y1 for d in page.get_drawings()]
         bbox = fitz.Rect(min(xs0), min(ys0), max(xs1), max(ys1))
-        assert (mm(bbox.width), mm(bbox.height)) == pytest.approx((100.0, 55.6), abs=0.1)
+        assert (mm(bbox.width), mm(bbox.height)) == pytest.approx((205.0, 113.9), abs=0.1)
 
     def test_the_default_via_the_cli_is_actual_size(self, source_pdf, out_path):
         src = source_pdf(n_pages=1, w_mm=90, h_mm=50)
@@ -245,3 +245,40 @@ class TestCLI:
         assert coerce_setting("layout.scaling", "FIT_TO_CELL", d) is PageScaling.FIT_TO_CELL
         assert coerce_setting("layout.scaling", "Fit to cell", d) is PageScaling.FIT_TO_CELL
         assert coerce_setting("layout.scaling", "actual_size", d) is PageScaling.ACTUAL_SIZE
+
+
+class TestPreflightScaling:
+    def test_enlargement_warning_only_under_fit_to_cell(self, source_pdf):
+        # A 90x50 mm card in a 100x71.75 mm cell: under FIT_TO_CELL it is enlarged to 111%,
+        # triggering the enlargement warning. Under ACTUAL_SIZE it prints at 100% so no
+        # enlargement is reported.
+        src = source_pdf(n_pages=1, w_mm=90, h_mm=50)
+        doc = fitz.open(src)
+        try:
+            p_actual = a_card_project(src, PageScaling.ACTUAL_SIZE)
+            findings_actual = preflight(p_actual, doc)
+            enlarged_actual = [f for f in findings_actual if "enlarged" in f.message.lower()]
+            assert not enlarged_actual
+
+            p_fit = a_card_project(src, PageScaling.FIT_TO_CELL)
+            findings_fit = preflight(p_fit, doc)
+            enlarged_fit = [f for f in findings_fit if "enlarged" in f.message.lower()]
+            assert len(enlarged_fit) == 1
+            assert enlarged_fit[0].severity == Severity.WARNING
+            assert "111%" in enlarged_fit[0].message
+        finally:
+            doc.close()
+
+    def test_shrink_reporting_preserved_under_actual_size(self, source_pdf):
+        # An A3 page (297x420) on an A4 sheet (200x287 cell) must shrink in both modes,
+        # so preflight reports the scale reduction under ACTUAL_SIZE.
+        src = source_pdf(n_pages=1, w_mm=297, h_mm=420)
+        doc = fitz.open(src)
+        try:
+            p = a_card_project(src, PageScaling.ACTUAL_SIZE, nup=1)
+            findings = preflight(p, doc)
+            scaled = [f for f in findings if "scaled" in f.message.lower()]
+            assert len(scaled) == 1
+            assert scaled[0].severity == Severity.WARNING
+        finally:
+            doc.close()

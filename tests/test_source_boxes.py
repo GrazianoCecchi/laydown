@@ -11,7 +11,7 @@ import fitz
 import pytest
 
 from laydown.engine.data_model import (
-    Project, LayoutSettings, LayoutType, SheetSettings, Orientation,
+    Project, LayoutSettings, LayoutType, PageScaling, SheetSettings, Orientation,
     SourceSettings, SourceBox, MarkItem, MarkType,
 )
 from laydown.engine.geometry import cell_grid, fitted_rect, source_boxes, target_rect
@@ -24,7 +24,8 @@ from tests.helpers import (
 
 
 def a_project(src, *, box=SourceBox.TRIM, bleed=0.0, preset="A3",
-              orientation=Orientation.LANDSCAPE, nup=2, margin=5.0, marks=None):
+              orientation=Orientation.LANDSCAPE, nup=2, margin=5.0, marks=None,
+              scaling=PageScaling.ACTUAL_SIZE):
     p = Project(source_pdf_path=src)
     p.source = SourceSettings(box=box, bleed_mm=bleed)
     p.sheet = SheetSettings(
@@ -32,7 +33,7 @@ def a_project(src, *, box=SourceBox.TRIM, bleed=0.0, preset="A3",
         margin_top_mm=margin, margin_bottom_mm=margin,
         margin_left_mm=margin, margin_right_mm=margin,
     )
-    p.layout = LayoutSettings(layout_type=LayoutType.NUP, nup=nup)
+    p.layout = LayoutSettings(layout_type=LayoutType.NUP, nup=nup, scaling=scaling)
     p.marks = marks or []
     return p
 
@@ -62,7 +63,7 @@ class TestBoxSelection:
     def test_trim_box_is_what_lands_on_the_cell(self, source_pdf, out_path):
         src = source_pdf(n_pages=2, trim_inset_mm=10)
         out = out_path()
-        impose(a_project(src, box=SourceBox.TRIM), out)
+        impose(a_project(src, box=SourceBox.TRIM, scaling=PageScaling.FIT_TO_CELL), out)
 
         src_doc = fitz.open(src)
         trim = src_doc[0].trimbox
@@ -238,7 +239,7 @@ class TestGeometryUnits:
         cell = fitz.Rect(0, 0, 200, 200)
         place = fitz.Rect(10, 10, 110, 110)   # 100×100
         clip = fitz.Rect(0, 0, 120, 120)      # 10 units of bleed all round
-        target, trim = target_rect(cell, place, clip)
+        target, trim = target_rect(cell, place, clip, scaling=PageScaling.FIT_TO_CELL)
         assert (trim.width, trim.height) == pytest.approx((200, 200))
         # scale is 2×, so 10 units of bleed becomes 20 on the sheet
         assert target.x0 == pytest.approx(trim.x0 - 20)
