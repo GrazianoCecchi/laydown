@@ -4,7 +4,7 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
-## [Unreleased]
+## [0.4.6] — 2026-10-12
 
 Output-correctness and robustness round from the 2026-10-12 review
 (`docs/ai/reviews/2026-10-12-review.md`).
