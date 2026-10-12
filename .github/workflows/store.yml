@@ -34,9 +34,9 @@ jobs:
     name: Build unsigned Store MSIX
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           architecture: x64
@@ -44,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]" pyinstaller
+          pip install -e ".[dev]" pyinstaller -c packaging/constraints.txt
 
       - name: Tests
         run: pytest -q
@@ -66,7 +66,7 @@ jobs:
       - name: Show the built package
         run: Get-ChildItem dist\Laydown-*-store.msix | Format-List Name, Length
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: laydown-store-msix
           path: dist/Laydown-*-store.msix
