@@ -5,6 +5,7 @@ Renders ALL imposed sheets and displays them in a scrollable grid.
 Supports 1/2/4-column layout, zoom, fit-to-width/page, and overlays.
 """
 
+import math
 import os
 from typing import Optional, List
 from dataclasses import dataclass
@@ -20,9 +21,56 @@ import fitz
 
 from laydown.engine.data_model import Project
 from laydown.ui import theme as t
+from laydown.engine.geometry import sheet_size_pt
 from laydown.engine.impose import ImposeResult, impose_to_temp
 
 MAGENTA = QColor(t.OVERLAY)
+
+# ── preview memory budget ───────────────────────────
+
+#: Total raster memory the preview may hold across ALL sheets. A 600-page 2-up
+#: job (300 A3 sheets) is ~1.6 GB of QPixmaps at 96 DPI and ~14 GB at 288 DPI —
+#: the budget caps the render DPI so that can never happen.
+PREVIEW_MEMORY_BUDGET_BYTES = 512 * 1024 * 1024
+
+#: Never render below this: an unreadable preview is worse than an oversized one.
+PREVIEW_DPI_FLOOR = 36
+
+#: RGB888 (alpha=False), 3 bytes per pixel.
+PREVIEW_BYTES_PER_PIXEL = 3
+
+
+def budgeted_dpi(
+    sheet_count: int,
+    sheet_w_pt: float,
+    sheet_h_pt: float,
+    target_dpi: int,
+    budget: int = PREVIEW_MEMORY_BUDGET_BYTES,
+    floor: int = PREVIEW_DPI_FLOOR,
+) -> int:
+    """
+    The largest DPI <= *target_dpi* that keeps the whole job inside the budget.
+
+    A sheet of sheet_w_pt x sheet_h_pt points rendered at DPI *d* is
+    (sheet_w_pt * d/72) x (sheet_h_pt * d/72) pixels at 3 bytes each, so the
+    job costs::
+
+        bytes(d) = sheet_count * sheet_w_pt * sheet_h_pt * 3 * (d / 72)^2
+
+    Solving bytes(d) = budget for d and clamping into [floor, target_dpi]
+    gives the render DPI. Small jobs never feel it: 4 A4 sheets at 300 DPI are
+    ~104 MB, well under the budget, so they render at the full target. A
+    300-A3-sheet job lands near 55 DPI instead of the gigabytes an unbounded
+    render would allocate. The floor wins over the budget — if even the floor
+    DPI exceeds the budget the preview stays readable and oversize.
+    """
+    if sheet_count <= 0 or sheet_w_pt <= 0 or sheet_h_pt <= 0:
+        return max(floor, int(target_dpi))
+    bytes_per_dpi_squared = (
+        sheet_count * sheet_w_pt * sheet_h_pt * PREVIEW_BYTES_PER_PIXEL / (72.0 ** 2)
+    )
+    affordable = math.sqrt(budget / bytes_per_dpi_squared)
+    return int(max(floor, min(float(target_dpi), affordable)))
 
 
 # ── cell geometry for overlays ───────────────────────
@@ -55,12 +103,17 @@ def cells_from_result(result: ImposeResult, sheet_idx: int) -> List[CellInfo]:
 
 
 def draw_overlays(
-    pixmap: QPixmap, cells: List[CellInfo], scale: float,
+    image: QImage, cells: List[CellInfo], scale: float,
     show_tops: bool, show_numbers: bool, show_frames: bool, show_previews: bool,
-) -> QPixmap:
+) -> QImage:
+    """Paint overlay marks onto a QImage.
+
+    QImage (not QPixmap) on purpose: this runs in the render thread, and Qt
+    only allows QPixmap operations on the GUI thread.
+    """
     if not cells:
-        return pixmap
-    painter = QPainter(pixmap)
+        return image
+    painter = QPainter(image)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
     for c in cells:
@@ -94,43 +147,58 @@ def draw_overlays(
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(c.page_num))
 
     painter.end()
-    return pixmap
+    return image
 
 
 # ── worker: render ALL sheets ────────────────────────
 
 
 class _RenderWorker(QThread):
-    done = pyqtSignal(list)  # List[QPixmap]
-    error = pyqtSignal(str)
+    """Renders every sheet of one imposition as a list of QImages.
 
-    def __init__(self, parent=None):
+    One worker per render: a settings change cancels the old worker and starts
+    a new one instead of waiting, so the GUI thread never blocks on a render.
+    The worker's results carry the generation they belong to; the canvas drops
+    any that arrive after a newer render was requested.
+
+    QImage (not QPixmap) because this runs on the worker thread — Qt only
+    permits QPixmap on the GUI thread. The canvas converts to QPixmap when
+    the results arrive.
+    """
+
+    done = pyqtSignal(list, int, int)  # List[QImage], render DPI, generation
+    error = pyqtSignal(str, int)      # message, generation
+
+    def __init__(self, project, target_dpi, overlays, generation, parent=None):
         super().__init__(parent)
-        self.project: Optional[Project] = None
-        # Rendering DPI. Sheets used to be rasterised at 72 and then scaled up by the
-        # zoom factor, so "actual size" on a 96-DPI screen was a 1.33x blow-up of a
-        # 72-DPI image and looked soft. The canvas now asks for a DPI that matches how
-        # large the sheet will actually be drawn.
-        self.dpi: int = 96
-        self.show_tops = False
-        self.show_numbers = True
-        self.show_frames = True
-        self.show_previews = True
+        self.project: Project = project
+        # The DPI worth rendering at (zoom-driven). The real DPI used is
+        # derived per job inside run(): the memory budget depends on the
+        # actual sheet count and sheet size, which only the imposed document
+        # knows for sure.
+        self.target_dpi: int = target_dpi
+        self.show_tops, self.show_numbers, self.show_frames, self.show_previews = overlays
+        self.generation = generation
         self._cancel = False
 
     def cancel(self):
         self._cancel = True
 
     def run(self):
-        self._cancel = False
+        if self._cancel:
+            return  # cancelled before the thread even started
         tmp_path = None
         try:
             tmp_path, result = impose_to_temp(self.project)
             doc = fitz.open(tmp_path)
             total = len(doc)
-            mat = fitz.Matrix(self.dpi / 72.0, self.dpi / 72.0)
-            scale = self.dpi / 72.0
-            pixmaps = []
+            dpi = self.target_dpi
+            if total:
+                rect = doc[0].rect
+                dpi = budgeted_dpi(total, rect.width, rect.height, self.target_dpi)
+            mat = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+            scale = dpi / 72.0
+            images = []
 
             for i in range(total):
                 if self._cancel:
@@ -138,21 +206,23 @@ class _RenderWorker(QThread):
                     return
                 page = doc[i]
                 pix = page.get_pixmap(matrix=mat, alpha=False)
+                # .copy() detaches: pix.samples is freed when pix goes out of
+                # scope, and a QImage built on it without copying would point
+                # into freed memory.
                 img = QImage(pix.samples, pix.width, pix.height, pix.stride,
-                             QImage.Format.Format_RGB888)
-                pm = QPixmap.fromImage(img)
+                             QImage.Format.Format_RGB888).copy()
                 cells = cells_from_result(result, i)
-                pm = draw_overlays(pm, cells, scale,
-                                   self.show_tops, self.show_numbers,
-                                   self.show_frames, self.show_previews)
-                pixmaps.append(pm)
+                img = draw_overlays(img, cells, scale,
+                                    self.show_tops, self.show_numbers,
+                                    self.show_frames, self.show_previews)
+                images.append(img)
 
             doc.close()
             if not self._cancel:
-                self.done.emit(pixmaps)
+                self.done.emit(images, dpi, self.generation)
         except Exception as e:
             if not self._cancel:
-                self.error.emit(str(e))
+                self.error.emit(str(e), self.generation)
         finally:
             if tmp_path:
                 try:
@@ -185,9 +255,14 @@ class SheetCanvas(QScrollArea):
         self._show_frames = True
         self._show_previews = True
 
-        self._worker = _RenderWorker(self)
-        self._worker.done.connect(self._on_done)
-        self._worker.error.connect(self._on_error)
+        # One worker per render. _worker is the newest; _workers holds every
+        # in-flight one so clear_all/cleanup can cancel and join them.
+        self._worker: Optional[_RenderWorker] = None
+        self._workers: List[_RenderWorker] = []
+        # Bumped on every render request and on clear_all. Results carry the
+        # generation they were started with, so a stale result that lands
+        # after a newer request is dropped instead of overwriting it.
+        self._generation = 0
 
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -258,8 +333,9 @@ class SheetCanvas(QScrollArea):
             self._debounce.start()
 
     def clear_all(self):
-        self._worker.cancel()
-        self._worker.wait()
+        # Used on close/reset, so waiting here is fine (it is NOT fine in
+        # _do_render — see there).
+        self._stop_workers()
         self._project = None
         self._pixmaps.clear()
         self._show_placeholder()
@@ -276,7 +352,10 @@ class SheetCanvas(QScrollArea):
         self._rebuild_display()
         # Re-rasterise if the sheets are now drawn much larger or smaller than the
         # pixels we have, so zooming in sharpens instead of magnifying blur.
-        if self._project and abs(self._target_dpi() - self._render_dpi) > 24:
+        # Compare against the budgeted DPI a new render would actually use —
+        # on a large job the budget caps it below the zoom target, and without
+        # that every zoom click would queue a re-render that changes nothing.
+        if self._project and abs(self._planned_dpi() - self._render_dpi) > 24:
             self._debounce.start()
 
     def zoom_in(self):
@@ -332,29 +411,74 @@ class SheetCanvas(QScrollArea):
         zoom = self._zoom if self._zoom > 0 else 1.0
         return int(max(96, min(300, self._base_dpi * zoom * ratio)))
 
+    def _planned_dpi(self) -> int:
+        """The DPI a render started now would use: the zoom target capped by
+        the memory budget. The worker recomputes this with the real sheet
+        count once the job is imposed; this estimate (last render's count)
+        is what the zoom heuristic compares against."""
+        target = self._target_dpi()
+        if not self._project:
+            return target
+        w_pt, h_pt = sheet_size_pt(self._project)
+        count = len(self._pixmaps) or 1
+        return budgeted_dpi(count, w_pt, h_pt, target)
+
     def _do_render(self):
         if not self._project or not self._project.source_pdf_path:
             return
-        self._worker.cancel()
-        self._worker.wait()
-        self._render_dpi = self._target_dpi()
-        self._worker.project = self._project
-        self._worker.dpi = self._render_dpi
-        self._worker.show_tops = self._show_tops
-        self._worker.show_numbers = self._show_numbers
-        self._worker.show_frames = self._show_frames
-        self._worker.show_previews = self._show_previews
-        self._worker.start()
+        self._generation += 1
+        # Cancel any in-flight render but NEVER wait() for it here: that used
+        # to freeze the GUI thread until the old render finished (PyMuPDF
+        # holds the GIL through each call, so the wait was long). The old
+        # worker's late done/error is dropped by the generation check.
+        if self._worker is not None:
+            self._worker.cancel()
+        worker = _RenderWorker(
+            self._project, self._target_dpi(),
+            (self._show_tops, self._show_numbers, self._show_frames,
+             self._show_previews),
+            self._generation,
+        )
+        worker.done.connect(self._on_done)
+        worker.error.connect(self._on_error)
+        worker.finished.connect(self._retire_worker)
+        self._workers.append(worker)
+        self._worker = worker
+        worker.start()
 
-    def _on_done(self, pixmaps: list):
-        self._pixmaps = pixmaps
+    def _retire_worker(self):
+        worker = self.sender()
+        if worker in self._workers:
+            self._workers.remove(worker)
+        if self._worker is worker:
+            self._worker = None
+        worker.deleteLater()
+
+    def _stop_workers(self):
+        """Cancel every in-flight render and join it. Only for teardown paths
+        (clear_all/cleanup) — calling this on a settings change would block
+        the GUI thread, which is exactly what the per-render workers avoid."""
+        self._generation += 1  # invalidate results still in flight
+        for worker in self._workers:
+            worker.cancel()
+        for worker in self._workers:
+            worker.wait()
+
+    def _on_done(self, images: list, render_dpi: int, generation: int):
+        if generation != self._generation:
+            return  # a newer settings change superseded this render
+        self._render_dpi = render_dpi
+        # QPixmap belongs on the GUI thread; the worker handed us QImages.
+        self._pixmaps = [QPixmap.fromImage(img) for img in images]
         if self._zoom <= 0:
             self._rebuild_display()
             QTimer.singleShot(50, self.fit_width)
         else:
             self._rebuild_display()
 
-    def _on_error(self, msg: str):
+    def _on_error(self, msg: str, generation: int):
+        if generation != self._generation:
+            return
         self._clear_grid()
         lbl = QLabel(f"Render error:\n{msg}")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -404,5 +528,4 @@ class SheetCanvas(QScrollArea):
     # ── cleanup ──────────────────────────────────
 
     def cleanup(self):
-        self._worker.cancel()
-        self._worker.wait()
+        self._stop_workers()
