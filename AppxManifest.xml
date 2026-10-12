@@ -6,9 +6,10 @@
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   IgnorableNamespaces="uap rescap desktop">
 
+  <!-- The real version is stamped from laydown/__init__.py by packaging/windows/build.ps1 -->
   <Identity
     Name="LaydownTeam.Laydown"
-    Version="0.3.0.0"
+    Version="0.0.0.0"
     Publisher="CN=LaydownTeam"
     ProcessorArchitecture="x64" />
 

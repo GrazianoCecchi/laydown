@@ -4,9 +4,12 @@
 - **CodeGraph does not auto-sync here** — run `codegraph sync` after editing code.
 - **Git push needs Windows credentials:** `cmd.exe /c "git push origin dev"`.
 - `core.filemode false` is set — don't "fix" phantom mode diffs.
-- `git status` can take minutes: large untracked trees (`pressready-voice/venv`,
-  `framer-demo/node_modules`, `dist/`, `build/`) on a slow /mnt mount. Prefer
-  `git status -- <path>` or `git ls-files` when possible.
+- `git status` can take minutes: large untracked trees (`framer-demo/node_modules`,
+  `dist/`, `build/`) on a slow /mnt mount. Prefer `git status -- <path>` or
+  `git ls-files` when possible.
+- **Windows git (`core.autocrlf=true`) vs WSL git:** without `.gitattributes` a Windows checkout
+  writes CRLF and WSL tools see the whole tree "modified"; `.gitattributes` pins LF (added
+  2026-10-12).
 - **Showing the GUI needs Windows Python**, but it can be *constructed* headless in WSL:
   `QT_QPA_PLATFORM=offscreen python -m laydown --smoke` builds the real MainWindow and
   drives a load. The Windows-only calls (`ctypes.windll`, `os.startfile`) live in
@@ -19,6 +22,11 @@
   `page.trimbox = Rect(10, 50, …)` writes a y-flipped `/TrimBox` into the file. So
   `clip=page.trimbox` can be passed straight to `show_pdf_page` without converting.
 - **`page.rect` is the CropBox, not the MediaBox** — they differ on trimmed PDFs.
+- **PyMuPDF box getters (`page.trimbox` etc.) are in UNROTATED space while `page.rect` is rotated**,
+  and `show_pdf_page` mishandles rotated sources — impose normalises rotation in memory first
+  (`preprocessors.normalise_rotation`); never intersect raw boxes with `page.rect`.
+- **PyMuPDF holds the GIL during MuPDF calls**, so a QThread does not keep the UI responsive on
+  its own — keep preview work bounded (the preview has a raster-memory budget).
 - **Output is not byte-reproducible**: MuPDF randomises the trailer `/ID` per save. Page
   content streams *are* byte-identical, which is what `tests/test_determinism.py` asserts.
 - **PDF has no in-place content transform** — scaling artwork means re-placing the page into
@@ -42,6 +50,8 @@
   to rotate with it (`geometry.place_page`).
 - **`preprocessors.apply_preprocessors` may return a *different* document** (scaling has
   to rebuild pages). The caller owns the input; if the returned doc differs, close both.
+- **Bleed facing another cell is capped at half the gutter and the fold side at the fold; creep is clipped
+  at the fold — so "bleed is missing on an inner edge" is by design.
 
 ## Build / packaging
 - **There is no 32-bit Windows build and there cannot be a sensible one.** PyQt6 publishes

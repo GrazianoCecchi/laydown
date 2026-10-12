@@ -131,13 +131,17 @@ start at [`AGENTS.md`](AGENTS.md), then [`docs/ai/START_HERE.md`](docs/ai/START_
 
 ```bash
 pip install -e ".[dev]"
-pytest                          # 235 tests, no display needed
+pytest                          # the full suite, no display needed
 python -m laydown --smoke    # end-to-end check, exits 0 or 1
+python -m laydown impose SRC.pdf -o OUT.pdf [--preset P.json] [--set TARGET=VALUE ...] [--force]
+python -m laydown preflight SRC.pdf [--preset ...] [--set ...] [--json]
 ```
 
 The engine (`laydown/engine/`) doesn't import Qt, so it's testable on its own — and every
 setting the UI offers has to be one the engine actually honours, or the test suite fails. That's
 deliberate; there's a story behind it in [`docs/ai/DECISIONS.md`](docs/ai/DECISIONS.md).
+
+The headless CLI never loads Qt: exit 0 ok / 1 error / 2 blocked by a preflight error.
 
 ## License
 
