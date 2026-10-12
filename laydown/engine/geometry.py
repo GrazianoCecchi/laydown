@@ -224,8 +224,12 @@ def clamped_clip(
     box, which is how a crept page is clipped at a fold. The place box itself
     never moves, so the trim rect — and the crop marks that follow it — are
     unaffected.
+
+    This also runs with no bleed, where the clip starts equal to the place
+    box: every margin is zero, so only a negative cap (creep past the fold)
+    changes anything.
     """
-    if clip == place or all(c == math.inf for c in caps):
+    if all(c == math.inf for c in caps):
         return clip
 
     pw = place.width if rotate == 0 else place.height

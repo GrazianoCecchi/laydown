@@ -167,14 +167,18 @@ def _render(
                 place, clip = source_boxes(src_page, project.source)
                 target, trim, rotate = place_page(
                     placement.cell, place, clip, allow_rotate=project.layout.auto_rotate)
-                if clip != place:
-                    # Bleed is welcome on bare paper, but never over a
-                    # neighbour's live area or across a booklet fold. Each
-                    # side is capped in sheet space and the clip shrinks to
-                    # match; the place box stays put, so the trim (and the
-                    # marks that follow it) do not move.
-                    caps = bleed_caps(project, sheet, placement.cell, trim)
-                    clip = clamped_clip(place, clip, trim, rotate, caps)
+                # Bleed is welcome on bare paper, but never over a
+                # neighbour's live area or across a booklet fold. Each
+                # side is capped in sheet space and the clip shrinks to
+                # match; the place box stays put, so the trim (and the
+                # marks that follow it) do not move. The caps apply with
+                # no bleed too: there the clip starts equal to the place
+                # box, and a negative fold cap — creep pushed the trim
+                # past the fold — is the only thing that can cut in.
+                caps = bleed_caps(project, sheet, placement.cell, trim)
+                clamped = clamped_clip(place, clip, trim, rotate, caps)
+                if clamped != clip:
+                    clip = clamped
                     target, trim, rotate = place_page(
                         placement.cell, place, clip,
                         allow_rotate=project.layout.auto_rotate)

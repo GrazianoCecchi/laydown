@@ -192,6 +192,40 @@ class TestBookletBleed:
             assert_pixel(page, fold_x + d * MM, y, page_colour(right.page_number),
                          f"{d} mm past the fold must be the right page's ink")
 
+    def test_creep_with_no_bleed_never_prints_across_the_fold(self, tmp_path):
+        # (f) The same creep as (d) with NO bleed at all: clip == place, so
+        # the fold cap is the only thing that can keep the right page's ink
+        # off the left one. The source is built inline because colour_source
+        # needs bleed > 0 for its trim rect: these are plain full-page colour
+        # A5s with no boxes of any kind.
+        doc = fitz.open()
+        for i in range(1, 9):
+            page = doc.new_page(width=mm_to_pt(148), height=mm_to_pt(210))
+            page.draw_rect(page.rect, color=None, fill=page_colour(i))
+        src = str(tmp_path / "src.pdf")
+        doc.save(src)
+        doc.close()
+
+        project = a_project(src, bleed=0.0, layout=LayoutSettings(
+            layout_type=LayoutType.BOOKLET, gutter_h_mm=0.0,
+            creep_enabled=True, creep_outer_mm=0.0, creep_inner_mm=8.0))
+        result = impose_detailed(project, str(tmp_path / "out.pdf"))
+
+        page = fitz.open(str(tmp_path / "out.pdf"))[-1]
+        left, right = result.placed[-1][0], result.placed[-1][1]
+        fold_x = left.trim.x1 + (right.trim.x0 - left.trim.x1) / 2  # gutter 0
+        y = (left.trim.y0 + left.trim.y1) / 2
+
+        # The creep shift itself is unchanged: the trims still overlap the fold.
+        assert left.trim.x1 > fold_x and right.trim.x0 < fold_x, (
+            "creep must keep shifting the trims towards the spine"
+        )
+        for d in (0.5, 1.0, 2.0, 4.0):
+            assert_pixel(page, fold_x - d * MM, y, page_colour(left.page_number),
+                         f"{d} mm short of the fold must be the left page's ink")
+            assert_pixel(page, fold_x + d * MM, y, page_colour(right.page_number),
+                         f"{d} mm past the fold must be the right page's ink")
+
 
 class TestRotatedBleed:
     def test_auto_rotation_keeps_the_bleed_sides_and_their_caps(self, tmp_path):
