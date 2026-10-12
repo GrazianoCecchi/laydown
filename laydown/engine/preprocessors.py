@@ -57,6 +57,41 @@ def apply_preprocessors(
     return current
 
 
+def normalise_rotation(doc: fitz.Document) -> None:
+    """
+    Bake every page's /Rotate into its content stream, in place.
+
+    A rotated page is a trap twice over: PyMuPDF's box getters report UNROTATED
+    coordinates while ``page.rect`` is the rotated (visual) page, and
+    ``show_pdf_page`` mishandles rotated source pages — together they silently
+    crop artwork. After this call every page has rotation 0 and its boxes
+    describe the visual page, so boxes and placement can be reasoned about in
+    one space.
+
+    ``remove_rotation`` resets the Trim/Bleed/Art boxes to the full page, so each
+    box is captured first in visual coordinates (``box * page.rotation_matrix``)
+    and set again afterwards. A box that already covered the whole page is left
+    alone — that is the default the reset produced.
+
+    In-memory only: the caller's document object changes, the file on disk never
+    does (nothing here saves).
+    """
+    for page in doc:
+        if page.rotation == 0:
+            continue
+        visual_rect = fitz.Rect(page.rect)
+        boxes = {}
+        for name in ("cropbox", "trimbox", "bleedbox", "artbox"):
+            box = getattr(page, name)
+            if not box.is_empty:
+                boxes[name] = box * page.rotation_matrix
+        page.remove_rotation()
+        for name, box in boxes.items():
+            if box.is_empty or box == visual_rect:
+                continue
+            getattr(page, f"set_{name}")(box)
+
+
 def _rotate(doc: fitz.Document, angle: RotateAngle) -> None:
     for page in doc:
         page.set_rotation((page.rotation + angle.value) % 360)
@@ -75,6 +110,13 @@ def _scale(doc: fitz.Document, factor: float) -> fitz.Document:
         raise ValueError(f"Scale factor must be greater than 0, got {factor}")
     if factor == 1.0:
         return doc
+
+    # A rotated page's boxes are reported in unrotated coordinates while
+    # page.rect is the rotated page, and show_pdf_page mishandles rotated
+    # sources — re-placing one would mis-scale its boxes and crop artwork.
+    # Normalise first, whether the rotation came from the source file or an
+    # earlier Rotate step. In place, which a step is allowed to do.
+    normalise_rotation(doc)
 
     out = fitz.open()
     for page in doc:

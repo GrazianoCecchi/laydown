@@ -24,7 +24,7 @@ from laydown.engine.geometry import (
     source_boxes,
 )
 from laydown.engine.marks import draw_marks
-from laydown.engine.preprocessors import apply_preprocessors
+from laydown.engine.preprocessors import apply_preprocessors, normalise_rotation
 from laydown.engine.utils import parse_page_range
 
 __all__ = ["impose", "impose_to_temp", "booklet_page_order", "ImposeResult", "PlacedPage"]
@@ -84,6 +84,10 @@ def impose_detailed(
 
         # May hand back a different document (see apply_preprocessors' contract).
         work_doc = apply_preprocessors(src_doc, project.preprocessors)
+        # Bake any /Rotate into the content stream before a box is read or a page
+        # placed — after the preprocessors, so the Rotate preprocessor is covered
+        # too. In-memory only; the source file on disk is never touched.
+        normalise_rotation(work_doc)
         try:
             expr = project.layout.page_range.strip()
             page_indices = (
