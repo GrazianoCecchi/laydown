@@ -1,16 +1,22 @@
+<p align="center">
+  <img src="assets/readme/featured.jpg" alt="Laydown — put your pages on the press sheet: booklets, cards and multi-page layouts from any PDF"/>
+</p>
+
 # Laydown — put your pages on the press sheet
 
 **Laydown lays PDF pages out on printing sheets.** Give it a document, tell it what you're
 printing on, and it arranges the pages so they come out right after they're printed, folded and
 cut. Two-up on A3, a saddle-stitched booklet, a sheet of labels — that job.
 
-It's free, open source, and runs on your own machine. Nothing is uploaded anywhere.
+It runs on your own machine — nothing is uploaded anywhere. **[Get it on the Microsoft Store](https://apps.microsoft.com/search?query=Laydown%20Print%20Layouts)** for a
+signed, auto-updating install that supports development, or build the same open-source app yourself from the source below.
 
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Laydown-D07B24)](https://apps.microsoft.com/search?query=Laydown%20Print%20Layouts)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)](#install)
 [![Release](https://img.shields.io/github/v/release/danielmevit/laydown?display_name=tag&sort=semver)](https://github.com/danielmevit/laydown/releases)
 
-![Laydown](assets/screenshot.png)
+![Laydown in a 24-second loop: booklets in the right order, business cards on one sheet, the Source, Layout, Sheet and Marks tabs, preflight warnings and the step-by-step workflow](assets/readme/slideshow.webp)
 
 - **Your pages stay sharp.** Pages are embedded as vectors, never turned into pictures. What
   comes out is exactly as crisp as what went in.
@@ -24,7 +30,9 @@ It's free, open source, and runs on your own machine. Nothing is uploaded anywhe
 
 ## Install
 
-**Windows** — easiest is the portable `.zip` from
+**Windows — Microsoft Store** — [Laydown - Print Layouts](https://apps.microsoft.com/search?query=Laydown%20Print%20Layouts): one click, signed, and it updates itself.
+
+**Windows — download** — the portable `.zip` from
 [Releases](https://github.com/danielmevit/laydown/releases): unzip, run `Laydown.exe`
 (SmartScreen warns once — **More info → Run anyway**). Prefer a proper install? The `.msix` is
 signed with the project's own certificate, so Windows asks you to trust it once first — grab
@@ -100,7 +108,8 @@ time. On Windows that's **More info → Run anyway**. Signing costs money and is
 **Does it upload my documents?** No. There's no network code in it at all. It opens your file,
 writes a new one, and that's the whole story.
 
-**Does it cost anything?** No, and there's no paid tier.
+**Does it cost anything?** On the Microsoft Store it's a one-time purchase, with no subscription, and buying it
+supports development. The source code is AGPL, so you can also build it yourself for free.
 
 **Will my pages lose quality?** No. They're embedded as vectors, not re-rendered. Text stays
 text.
@@ -157,7 +166,7 @@ Provided "as is", without warranty. **Check your output before you commit a job 
 
 <sub><b>Keywords:</b> pdf imposition · imposition software · n-up pdf · booklet printing · saddle
 stitch imposition · perfect binding imposition · pdf booklet maker · impose pdf pages · printers
-marks · crop marks pdf · bleed and trim · prepress software · free imposition software · open
+marks · crop marks pdf · bleed and trim · prepress software · open
 source imposition · Imposition Wizard alternative · Quite Imposing alternative · BookletCreator
 alternative · pdf to press sheet · signature imposition · page creep compensation · gang up
 printing · print shop tools · commercial printing software · pdf prepress · vector imposition ·
