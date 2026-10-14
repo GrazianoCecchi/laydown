@@ -21,13 +21,13 @@ What you can do:
 • Use the trim and bleed from print-ready PDFs
 • Work in mm, cm, inches or points; save presets; undo anything
 
-Everything runs on your own computer. Nothing is uploaded, no account is needed, and
-it's free and open source.
+Everything runs on your own computer. Nothing is uploaded and no account is needed.
+One-time purchase, no subscription.
 
 ## Short description (optional, ~270 chars — shows near the top of the listing)
 Arrange PDF pages onto printing sheets — booklets, multi-up layouts and printer's
-marks. See the finished sheet before you print. Runs on your computer; free and open
-source.
+marks. See the finished sheet before you print. Runs on your computer; one-time
+purchase, no subscription.
 
 ## Product features (optional — up to 20 short bullets, one per row)
 - Put several pages on one sheet
@@ -72,19 +72,19 @@ Productivity (or: Photo & video → Utility; Productivity fits better)
 
 ## Screenshots (v0.4.6 presentation set — upload in this order)
 Folder: `laydown/store-images/v0.4.6/` (outside the repo), 3840×2160 PNG (Store: up to 10 desktop screenshots).
-1. laydown-01-beauty — 2. laydown-02-booklets — 3. laydown-03-many-per-sheet — 4. laydown-04-printers-marks —
-5. laydown-05-preflight — 6. laydown-06-private-offline-free — 7. laydown-07-made-for-print —
-8. laydown-08-how-to — 9. laydown-09-which-layout — 10. laydown-10-closing.
-Optional 16:9 hero image: laydown-hero-art-16x9-no-text. Sample content: a fictional travel brand ("Fjell & Hav")
-laid out by store-images/make_samples.py with photos under the Unsplash License (free for commercial use, no
-attribution required; list in store-images/photos/credits.txt). Jobs shown: an 8-page A5 brochure as a booklet on A4,
-8 business cards 8-up on A4, two A4 flyers.
+1. laydown-01-beauty — 2. laydown-02-booklets — 3. laydown-03-many-per-sheet — 4. laydown-04-source —
+5. laydown-05-layout — 6. laydown-06-sheet — 7. laydown-07-marks — 8. laydown-08-preflight —
+9. laydown-09-step-by-step — 10. laydown-10-closing.
+Optional 16:9 hero image: laydown-hero-art-16x9-no-text. Sample jobs (fictional brands, built by
+store-images/make_samples.py; photos under the Unsplash License — free for commercial use, no attribution required,
+list in store-images/photos/credits.txt): an 8-page A5 travel brochure as a booklet on A4, 8 ceramics-studio business
+cards 8-up on A4, two A4 event posters. Slides 4-7 explain the Source, Layout, Sheet and Marks tabs.
 
 ## Age rating (IARC questionnaire)
 No violence, no user content, no data collection → rates EVERYONE / 3+ everywhere.
 
 ## Pricing & availability
-Free · all markets · public.
+Paid · one-time purchase (set the price in Partner Center) · all markets · public.
 
 ## Notes for certification (the free-text box)
 Desktop PDF imposition tool (win32 full trust). Fully offline by design — the
