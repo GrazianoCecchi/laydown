@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/readme/featured.jpg" alt="Laydown — put your pages on the press sheet: booklets, cards and multi-page layouts from any PDF"/>
+  <img src="assets/readme/featured.jpg" alt="Laydown — Print Layouts: booklets, cards and multi-page layouts from any PDF"/>
 </p>
 
-# Laydown — put your pages on the press sheet
+# Laydown — Print Layouts
 
 **Laydown lays PDF pages out on printing sheets.** Give it a document, tell it what you're
 printing on, and it arranges the pages so they come out right after they're printed, folded and
