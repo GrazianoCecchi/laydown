@@ -30,13 +30,12 @@ marks. See the finished sheet before you print. Runs on your computer; one-time
 purchase, no subscription.
 
 ## Product features (optional — up to 20 short bullets, one per row)
-- Booklets in reading order: saddle stitch or perfect bound
-- Business cards, labels and flyers, many per sheet
-- Crop, registration and fold marks, colour bars
-- Uses the trim and bleed of print-ready PDFs
-- Any sheet size, margins, gutters and creep
-- Warnings before you print, and a live preview
-- Works offline: nothing is uploaded
+- Put several pages on one sheet
+- Make print-ready booklets
+- Crop, fold and registration marks
+- Handles bleed and trim boxes
+- Preview the finished sheet before printing
+- 100% offline — nothing is uploaded
 
 ## What's new in this version
 (Leave blank on the very first submission; use this for the 0.4.6 update.)
