@@ -30,12 +30,17 @@ marks. See the finished sheet before you print. Runs on your computer; one-time
 purchase, no subscription.
 
 ## Product features (optional — up to 20 short bullets, one per row)
-- Put several pages on one sheet
-- Make print-ready booklets
-- Crop, fold and registration marks
-- Handles bleed and trim boxes
-- Preview the finished sheet before printing
-- 100% offline — nothing is uploaded
+- Turn any PDF into a booklet
+- Fold, staple, and the pages are in order
+- Put many pages on one sheet of paper
+- Print 8 business cards on one page
+- See every sheet before you print
+- Add cutting and folding lines
+- Warns you about problems before you print
+- Any paper size you need
+- Print-shop PDFs with bleed work too
+- Works without internet — nothing is uploaded
+- Pay once, no subscription
 
 ## What's new in this version
 (Leave blank on the very first submission; use this for the 0.4.6 update.)
