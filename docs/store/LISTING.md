@@ -6,28 +6,33 @@ Field-by-field copy for Partner Center. Tone matches the site: commercial, not a
 Laydown - Print Layouts   (reserve it first: Store listing -> "Reserve more names"; the Store package's DisplayName must match)
 
 ## Description* (required — this is the field with the red error)
-Laydown arranges your PDF pages onto printing sheets — so a booklet or a multi-page
-layout comes out in the right order once it's printed, folded and cut.
+Laydown gets your PDF ready to print as a booklet, a sheet of business cards, or anything else that needs several pages on one piece of paper.
 
-Open a PDF, choose how the pages should sit on the sheet, and Laydown shows you the
-finished sheet on screen. When it looks right, save the new PDF and send it to your
-printer.
+Want to print a booklet? Open your PDF, pick Booklet, and Laydown puts the pages in the right order. Print it on both sides, fold it in the middle, staple it, and every page is where it should be.
+
+Need business cards or labels? Laydown puts 8 or 16 on one sheet at their real size, and you can add lines that show where to cut.
+
+You see every sheet on screen before you print, so there are no surprises. If something is wrong, like pages that would come out smaller, Laydown tells you first.
 
 What you can do:
 
-• Put several pages on one sheet — 2, 4, 8 and more
-• Make booklets — the pages are reordered for folding automatically
-• Add crop marks, fold marks and registration marks
-• Use the trim and bleed from print-ready PDFs
-• Work in mm, cm, inches or points; save presets; undo anything
+• Turn any PDF into a booklet you can fold and staple
+• Put 2, 4, 8 or 16 pages on one sheet
+• Print business cards, labels and flyers several at a time
+• Add cutting and folding lines
+• Use any paper size
+• Undo anything, and save your settings for next time
 
-Everything runs on your own computer. Nothing is uploaded and no account is needed.
-One-time purchase, no subscription.
+Good to know:
+
+• Works without internet. Your files never leave your computer
+• No account needed
+• Pay once, no subscription
+
+For print shops: Laydown also handles bleed, trim boxes, crop and registration marks, colour bars, creep and perfect binding.
 
 ## Short description (optional, ~270 chars — shows near the top of the listing)
-Arrange PDF pages onto printing sheets — booklets, multi-up layouts and printer's
-marks. See the finished sheet before you print. Runs on your computer; one-time
-purchase, no subscription.
+Print booklets, business cards and more from any PDF. Laydown puts the pages in the right order, so you can fold, staple and go. See every sheet before you print. Works offline. Pay once, no subscription.
 
 ## Product features (optional — up to 20 short bullets, one per row)
 - Turn any PDF into a booklet
@@ -43,13 +48,12 @@ purchase, no subscription.
 - Pay once, no subscription
 
 ## What's new in this version
-(Leave blank on the very first submission; use this for the 0.4.6 update.)
 Version 0.4.6
-• Pages now print at their actual size by default — choose Fit to cell to enlarge them
-• Rotated pages keep all of their artwork
-• Clearer preflight warnings before you export
-• Safer exports, and a faster, lighter preview on big jobs
-• Bleed and creep stay on their own page
+• Pages now print at their real size, unless you choose to enlarge them
+• Pages turned sideways keep all of their picture
+• Clearer warnings before you print
+• Safer saving, and faster previews for big files
+• Pictures that run to the edge no longer spill onto the next page
 
 ## Keywords (up to 7 — press Enter after each)
 booklet maker
