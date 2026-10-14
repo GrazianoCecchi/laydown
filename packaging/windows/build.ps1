@@ -125,6 +125,13 @@ if ($Store) {
     $manifest = [regex]::Replace($manifest, '(<Identity[^>]*?\sName=")[^"]+(")', "`${1}$($env:LAYDOWN_STORE_IDENTITY_NAME)`${2}")
     $manifest = [regex]::Replace($manifest, '(<Identity[^>]*?\sPublisher=")[^"]+(")', "`${1}$($env:LAYDOWN_STORE_PUBLISHER)`${2}")
     $manifest = [regex]::Replace($manifest, '(<PublisherDisplayName>)[^<]+(</PublisherDisplayName>)', "`${1}$($env:LAYDOWN_STORE_PUBLISHER_DISPLAY)`${2}")
+    # Optional: the Store product name. Package/Properties/DisplayName must equal a name reserved in Partner
+    # Center (e.g. "Laydown - Print Layouts"); the Start-menu tile (VisualElements) keeps the short "Laydown".
+    if ($env:LAYDOWN_STORE_DISPLAY_NAME) {
+        $display = [System.Security.SecurityElement]::Escape($env:LAYDOWN_STORE_DISPLAY_NAME)
+        $manifest = [regex]::Replace($manifest, '(<Properties>[\s\S]*?<DisplayName>)[^<]+(</DisplayName>)', "`${1}$display`${2}")
+        Write-Host "[ok] Store display name: $($env:LAYDOWN_STORE_DISPLAY_NAME)" -ForegroundColor Green
+    }
     Write-Host "[ok] Store identity stamped: $($env:LAYDOWN_STORE_IDENTITY_NAME)" -ForegroundColor Green
 }
 Set-Content "$stageDir\AppxManifest.xml" $manifest -Encoding UTF8

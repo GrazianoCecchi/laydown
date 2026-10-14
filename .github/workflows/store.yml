@@ -8,7 +8,7 @@ name: Store package
 # Run it from the Actions tab, or:
 #   gh workflow run "Store package" --ref main \
 #     -f identity_name="Mevit.Laydown" \
-#     -f publisher="CN=..." -f publisher_display="Mevit"
+#     -f publisher="CN=..." -f publisher_display="Mevit" -f display_name="Laydown - Print Layouts"
 # The finished Laydown-<version>-store.msix is a build artifact you upload on the
 # Partner Center Packages tab.
 
@@ -25,6 +25,10 @@ on:
         description: "PublisherDisplayName"
         required: true
         default: "Mevit"
+      display_name:
+        description: "Store product name = Properties/DisplayName (must match a name reserved in Partner Center; empty keeps 'Laydown')"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -62,6 +66,7 @@ jobs:
           LAYDOWN_STORE_IDENTITY_NAME: ${{ inputs.identity_name }}
           LAYDOWN_STORE_PUBLISHER: ${{ inputs.publisher }}
           LAYDOWN_STORE_PUBLISHER_DISPLAY: ${{ inputs.publisher_display }}
+          LAYDOWN_STORE_DISPLAY_NAME: ${{ inputs.display_name }}
 
       - name: Show the built package
         run: Get-ChildItem dist\Laydown-*-store.msix | Format-List Name, Length
