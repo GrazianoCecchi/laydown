@@ -80,14 +80,11 @@ Productivity (or: Photo & video → Utility; Productivity fits better)
   insists, we add a one-paragraph /privacy page to the site first.
 
 ## Screenshots (v0.4.6 presentation set — upload in this order)
-Folder: `laydown/store-images/v0.4.6/` (outside the repo), 3840×2160 PNG (Store: up to 10 desktop screenshots).
-1. laydown-01-beauty — 2. laydown-02-booklets — 3. laydown-03-many-per-sheet — 4. laydown-04-source —
-5. laydown-05-layout — 6. laydown-06-sheet — 7. laydown-07-marks — 8. laydown-08-preflight —
-9. laydown-09-step-by-step — 10. laydown-10-closing.
-Optional 16:9 hero image: laydown-hero-art-16x9-no-text. Sample jobs (fictional brands, built by
-store-images/make_samples.py; photos under the Unsplash License — free for commercial use, no attribution required,
-list in store-images/photos/credits.txt): an 8-page A5 travel brochure as a booklet on A4, 8 ceramics-studio business
-cards 8-up on A4, two A4 event posters. Slides 4-7 explain the Source, Layout, Sheet and Marks tabs.
+Folder: `laydown/store-images/v0.4.6/` (outside the repo), 3840×2160 PNG.
+1. laydown-01-beauty — 2. laydown-02-booklets — 3. laydown-03-many-per-sheet — 4. laydown-04-step-by-step —
+5. laydown-05-preflight — 6. laydown-06-closing. Optional 16:9 hero image: laydown-hero-art-16x9-no-text.
+Four tab explainers (Source, Layout, Sheet, Marks) are kept in v0.4.6/extra/ but not uploaded (owner's choice).
+Sample jobs use fictional brands and Unsplash-licensed photos (store-images/photos/credits.txt).
 
 ## Age rating (IARC questionnaire)
 No violence, no user content, no data collection → rates EVERYONE / 3+ everywhere.
