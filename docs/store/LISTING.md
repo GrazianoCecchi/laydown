@@ -32,7 +32,7 @@ Good to know:
 For print shops: Laydown also handles bleed, trim boxes, crop and registration marks, colour bars, creep and perfect binding.
 
 ## Short description (optional, ~270 chars — shows near the top of the listing)
-Arrange PDF pages onto printing sheets — booklets, several pages per sheet, and cutting and folding marks. See the finished sheet before you print. Runs on your computer; pay once, no subscription.
+Turn your PDF into a booklet you can fold and staple, or put several pages on one sheet of paper, like 8 business cards. You see exactly what will print before you print it. Works offline. Pay once, no subscription.
 
 ## Product features (optional — up to 20 short bullets, one per row)
 - Turn any PDF into a booklet
