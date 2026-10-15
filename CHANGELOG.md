@@ -10,6 +10,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
   sheet preview came out soft: sheets were rendered with the extra pixels, then scaled down to normal size
   and stretched back up by Windows. The preview now keeps the screen's full resolution. Pinned by
   `tests/test_preview_hidpi.py`.
+- **Booklets keep their spreads with "Blanks in the middle".** With an odd number of blank pages, every
+  later page was pushed to the wrong side of the fold. Blanks now go in the centre in pairs, and a single
+  odd blank sits just before the back cover.
+- **SRA press sheets.** SRA4, SRA3 and SRA2 are now in the sheet size list, next to the A sizes.
+- **Custom marks on network paths are refused.** A preset pointing a custom mark at a network share
+  (`\\server\share\...`) could make Windows send your login to that server. Laydown now skips such a
+  mark and preflight asks you to copy the file to this computer.
+- **Copyright lines** name the legal owner, Daniel Mitev, with the public attribution Daniel Mevit (@danielmevit).
 
 ## [0.4.6] — 2026-10-12
 
