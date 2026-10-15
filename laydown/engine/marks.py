@@ -21,7 +21,7 @@ from typing import List, Optional, Tuple
 
 import fitz
 
-from laydown.engine.utils import mm_to_pt
+from laydown.engine.utils import is_network_path, mm_to_pt
 from laydown.engine.data_model import MarkItem, MarkType
 
 # Defaults
@@ -364,7 +364,9 @@ def _draw_custom_mark(page: fitz.Page, mark) -> None:
     code at all, it is artwork placed by rule, and show_pdf_page already does exactly
     that. A shop can drop in its own bull's-eye, star target or house colour bar.
     """
-    if not mark.mark_pdf_path or not os.path.isfile(mark.mark_pdf_path):
+    if not mark.mark_pdf_path or is_network_path(mark.mark_pdf_path):
+        return  # never touch a network path: Windows would send credentials to it
+    if not os.path.isfile(mark.mark_pdf_path):
         return
     try:
         with fitz.open(mark.mark_pdf_path) as art:

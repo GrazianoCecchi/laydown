@@ -109,3 +109,19 @@ def parse_page_range(expr: str, total_pages: int) -> List[int]:
     if not result:
         raise ValueError("No valid pages in expression")
     return result
+
+
+def is_network_path(path: str) -> bool:
+    """
+    True for a path on another computer — anything starting with two slashes.
+
+    Touching such a path (os.path.isfile, fitz.open) makes Windows sign in to that
+    server with the user's credentials, so a shared preset could harvest them. That
+    covers \\\\server\\share, //server/share and the \\\\?\\ and \\\\.\\ device forms.
+    Windows treats / and \\ alike, so any mix of the two counts. Pure string check:
+    it never touches the filesystem itself.
+    """
+    if not path:
+        return False
+    head = path.lstrip()[:2]
+    return len(head) == 2 and all(c in "\\/" for c in head)

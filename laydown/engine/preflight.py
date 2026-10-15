@@ -27,7 +27,7 @@ import fitz
 from laydown.engine.data_model import LayoutType, MarkType, PageScaling, Project, SourceBox
 from laydown.engine.geometry import cell_grid, grid_for, source_boxes
 from laydown.engine.preprocessors import apply_preprocessors
-from laydown.engine.utils import mm_to_pt, parse_page_range, pt_to_mm
+from laydown.engine.utils import is_network_path, mm_to_pt, parse_page_range, pt_to_mm
 
 
 class Severity(Enum):
@@ -95,6 +95,17 @@ def _check_marks(project: Project) -> List[Finding]:
         path = mark.mark_pdf_path.strip()
         if not path:
             continue  # nothing configured; export skips it quietly too
+        if is_network_path(path):
+            # Checked before any filesystem call: even looking at a network path
+            # makes Windows sign in to that server with the user's credentials.
+            findings.append(Finding(
+                Severity.WARNING,
+                "Custom mark PDF is on a network location, so it is not used "
+                "— copy it to this computer",
+                f"The mark points at {path}. Laydown does not open files on other "
+                "computers for marks, so it is skipped at export time.",
+            ))
+            continue
         name = os.path.basename(path)
         if not os.path.isfile(path):
             findings.append(Finding(
