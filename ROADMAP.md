@@ -4,6 +4,21 @@ The plan. Grounded in `docs/ai/REFERENCE_STUDY.md` (Imposition Wizard 3 + Toolcr
 read of the code on 2026-07-14. Phases are ordered so each one is verifiable before the next
 starts (`_refs/ai-full-build-recipe.md` §4). Sizes: **S** ≈ a session, **M** ≈ a few, **L** ≈ a phase of its own.
 
+Laydown stays in **0.4.x while it is in beta** — every release is the next 0.4 patch; anything
+bigger is "later 0.4.x", not a new minor version.
+
+## 0.4.7 — in progress
+- **Sharp preview on HiDPI displays** — full resolution at 150–200 % Windows scaling (done on `dev`).
+- **Booklet "Blanks in the middle" keeps every page on its side** — with an odd number of blanks
+  the pairs go in the centre and the single blank sits just before the back cover, so left-hand
+  pages stay left-hand (review 2026-10-12, F11).
+- **SRA press sheets** — SRA4, SRA3 and SRA2 presets alongside the A sizes; A3 stays the default.
+- **Custom-mark PDFs on network paths are refused** — a preset pointing at `\\server\share\…`
+  could make Windows send the user's credentials to that server; export skips the mark and
+  preflight says to copy it to this computer.
+- **Copyright lines** — LICENSE, NOTICE, LICENSING.md and pyproject.toml carry the legal name
+  with the public attribution line.
+
 ## Done
 - **0.2.0** (2026-02-19) — four-tab UI, N-Up 2/4, saddle-stitch booklet, 6 mark types,
   vector imposition, multi-sheet preview, MSIX + portable ZIP.
@@ -163,6 +178,8 @@ Each item lands with a bench test, and only then does its schema control come ba
   `laydown preflight`); batch / hot folders still open.
 - Barcode marks — one or two symbologies (Code128, DataMatrix), not IW's thirty.
 - Repo hygiene: decide `framer-demo/`'s home.
+- **Work-and-turn / work-and-tumble** — needs a pressman to validate the plate semantics (see
+  "Not done from the original plan" above).
 - **Preview scale** — memory is now bounded (2026-10-12) but viewport-only rendering / reusing
   the imposed document is still open.
 
