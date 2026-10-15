@@ -224,7 +224,9 @@ SCHEMA: Tuple[Tab, ...] = (
                         default=False,
                         description=(
                             "A booklet pads out to a multiple of four. Put the blanks at the "
-                            "centre spread instead of the end, to keep a printed back cover."
+                            "centre spread instead of the end, to keep a printed back cover. "
+                            "An odd blank goes just inside the back cover, so every page "
+                            "stays on its own side of the spread."
                         ),
                     ),
                 ),

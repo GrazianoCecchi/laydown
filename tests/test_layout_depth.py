@@ -157,6 +157,53 @@ class TestFillers:
         order = booklet_page_order(6, booklet_layout(fillers_in_middle=True))
         assert order[-1] == (-1, -1), "the blanks should end up on the centre spread"
 
+    # An odd blank in the centre would push every later page onto the other side of
+    # the spread (left-hand pages printing as right-hand ones). Pairs go in the
+    # centre; the odd one sits just before the back cover.
+    def test_one_blank_goes_before_the_back_cover(self):
+        assert padded_slots(7, fillers_in_middle=True) == [0, 1, 2, 3, 4, 5, -1, 6]
+
+    def test_three_blanks_pair_in_the_middle_and_one_before_the_back_cover(self):
+        assert padded_slots(5, fillers_in_middle=True) == [0, 1, -1, -1, 2, 3, -1, 4]
+
+    def test_even_blanks_still_all_go_in_the_middle(self):
+        assert padded_slots(6, fillers_in_middle=True) == [0, 1, 2, -1, -1, 3, 4, 5]
+        assert padded_slots(10, fillers_in_middle=True) == [
+            0, 1, 2, 3, 4, -1, -1, 5, 6, 7, 8, 9]
+
+    def test_odd_blanks_at_the_end_by_default_are_unchanged(self):
+        assert padded_slots(7) == [0, 1, 2, 3, 4, 5, 6, -1]
+        assert padded_slots(5) == [0, 1, 2, 3, 4, -1, -1, -1]
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_tiny_documents_keep_the_front_cover_first(self, n):
+        slots = padded_slots(n, fillers_in_middle=True)
+        assert len(slots) == 4
+        assert slots[0] == 0
+        assert sorted(p for p in slots if p >= 0) == list(range(n))
+
+    @pytest.mark.parametrize("n", range(2, 30))
+    def test_every_interior_page_keeps_its_side(self, n):
+        slots = padded_slots(n, fillers_in_middle=True)
+        assert len(slots) % 4 == 0
+        assert slots[0] == 0 and slots[-1] == n - 1, "front and back covers stay outside"
+        for page in range(1, n - 1):
+            assert slots.index(page) % 2 == page % 2, f"page {page} changed side"
+
+    @pytest.mark.parametrize("n", [5, 6, 7, 9, 11])
+    def test_booklet_order_still_pairs_correctly(self, n):
+        slots = padded_slots(n, fillers_in_middle=True)
+        total = len(slots)
+        order = booklet_page_order(n, booklet_layout(fillers_in_middle=True))
+        assert len(order) == total // 2
+        flat = sorted(p for pair in order for p in pair if p >= 0)
+        assert flat == list(range(n))
+        # Covers share the outermost side, and facing slots always sum to total - 1.
+        assert order[0] == (n - 1, 0)
+        for left, right in order:
+            if left >= 0 and right >= 0:
+                assert slots.index(left) + slots.index(right) == total - 1
+
 
 # ── right to left ────────────────────────────────────
 

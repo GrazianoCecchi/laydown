@@ -307,7 +307,10 @@ def padded_slots(n: int, fillers_in_middle: bool = False) -> List[int]:
 
     A folded sheet always carries four pages, so a booklet's length is rounded up.
     By default the blanks land at the end (a blank back cover). fillers_in_middle
-    puts them in the centre instead, which keeps the back cover printed.
+    puts them in the centre instead, which keeps the back cover printed. Blanks go
+    in the centre in pairs only: an odd blank there would push every later page to
+    the other side of the spread. The odd one sits just before the back cover, so
+    every interior page keeps its left/right side.
     """
     padded = ((n + 3) // 4) * 4
     blanks = padded - n
@@ -315,8 +318,14 @@ def padded_slots(n: int, fillers_in_middle: bool = False) -> List[int]:
     if not blanks:
         return slots
     if fillers_in_middle:
-        mid = n // 2
-        return slots[:mid] + [-1] * blanks + slots[mid:]
+        pairs, odd = blanks - blanks % 2, blanks % 2
+        mid = max(1, n // 2)  # page 0 is the front cover — it always comes first
+        slots = slots[:mid] + [-1] * pairs + slots[mid:]
+        if odd:
+            # A one-page document has no separate back cover; pad the end.
+            at = len(slots) - 1 if n > 1 else len(slots)
+            slots.insert(at, -1)
+        return slots
     return slots + [-1] * blanks
 
 
