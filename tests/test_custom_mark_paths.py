@@ -23,6 +23,8 @@ NETWORK_PATHS = [
     r"\\?\UNC\server\share\mark.pdf",
     r"\\.\pipe\mark.pdf",
     r"\/server/share/mark.pdf",
+    r"\??\UNC\server\share\mark.pdf",
+    "/??/UNC/server/share/mark.pdf",
     r"  \\server\share\mark.pdf",
 ]
 
