@@ -16,6 +16,9 @@ bigger is "later 0.4.x", not a new minor version.
   4. Check the preview and the warnings bar.
   5. Generate PDF.
   "Don't show again" + reopen from Help. Remembered in settings. One window, a few steps, no pop-up chain.
+- **One window only (single instance)** (owner 2026-10-16): clicking "Open" in the Microsoft Store (or the Start
+  menu) while the app is already running opened a SECOND window. A second launch must hand over to the running
+  window (bring it to the front; pass along a PDF it was asked to open) and then exit.
 
 ## 0.4.7 — released 2026-10-15
 - **Sharp preview on HiDPI displays** — full resolution at 150–200 % Windows scaling (done on `dev`).
