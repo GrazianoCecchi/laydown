@@ -4,7 +4,7 @@
 - **CodeGraph does not auto-sync here** — run `codegraph sync` after editing code.
 - **Git push needs Windows credentials:** `cmd.exe /c "git push origin dev"`.
 - `core.filemode false` is set — don't "fix" phantom mode diffs.
-- `git status` can take minutes: large untracked trees (`framer-demo/node_modules`,
+- `git status` can take minutes: large untracked trees (formerly `framer-demo/node_modules`,
   `dist/`, `build/`) on a slow /mnt mount. Prefer `git status -- <path>` or
   `git ls-files` when possible.
 - **Windows git (`core.autocrlf=true`) vs WSL git:** without `.gitattributes` a Windows checkout
@@ -135,7 +135,7 @@
 - Watch for local names shadowing `theme as t` (`for t in ...` cost an hour).
 
 ## Repo oddities
-- `framer-demo/` (a web demo) is a **separate side-project** still tracked in this repo,
-  excluded from CodeGraph via `codegraph.json`; its future home is undecided. The other two
+- `framer-demo/` (an unrelated Framer Motion web demo) moved out of the repo on 2026-10-15 to
+  `D:\Vibe Coding\FramerTest`. The other two
   squatters are gone (2026-07-16): `pressready-voice/` moved to `D:\Vibe Coding\pressready-voice`,
   and the untracked `_legacy/` copy was deleted — v1 lives in git history (commit cf2b650).

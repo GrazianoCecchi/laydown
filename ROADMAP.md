@@ -18,6 +18,7 @@ bigger is "later 0.4.x", not a new minor version.
   preflight says to copy it to this computer.
 - **Copyright lines** — LICENSE, NOTICE, LICENSING.md and pyproject.toml carry the legal name
   with the public attribution line.
+- **Repo hygiene** — the unrelated `framer-demo/` side-project moved out of the repo to `D:\Vibe Coding\FramerTest`.
 
 ## Done
 - **0.2.0** (2026-02-19) — four-tab UI, N-Up 2/4, saddle-stitch booklet, 6 mark types,
@@ -177,7 +178,6 @@ Each item lands with a bench test, and only then does its schema control come ba
 - **CLI / batch / hot folders** — the headless CLI landed 2026-10-12 (`laydown impose` and
   `laydown preflight`); batch / hot folders still open.
 - Barcode marks — one or two symbologies (Code128, DataMatrix), not IW's thirty.
-- Repo hygiene: decide `framer-demo/`'s home.
 - **Work-and-turn / work-and-tumble** — needs a pressman to validate the plate semantics (see
   "Not done from the original plan" above).
 - **Preview scale** — memory is now bounded (2026-10-12) but viewport-only rendering / reusing

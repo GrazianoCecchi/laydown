@@ -1,5 +1,3 @@
 {
-  "exclude": [
-    "**/framer-demo/**"
-  ]
+  "exclude": []
 }
