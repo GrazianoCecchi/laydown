@@ -4,7 +4,7 @@ Everything a person (or agent) needs to pick this project up. For *why* the code
 way it is, read `AGENTS.md` then `docs/ai/START_HERE.md`; this file is the operational state —
 what's shipped, what's pending, and how to move each piece forward.
 
-_Last updated: 2026-10-12, at version 0.4.6._
+_Last updated: 2026-10-15, at version 0.4.7._
 
 ---
 
@@ -13,10 +13,10 @@ _Last updated: 2026-10-12, at version 0.4.6._
 | Thing | State |
 |-------|-------|
 | **What it is** | Laydown — a desktop app for **PDF imposition** (laying source pages onto press sheets). Python + PyQt6 UI + PyMuPDF engine. |
-| **Current version** | **0.4.6** (`laydown/__init__.py` is the single source of truth) |
+| **Current version** | **0.4.7** (`laydown/__init__.py` is the single source of truth) |
 | **Repo** | <https://github.com/danielmevit/laydown> (default branch `main`; work on `dev`, merge to `main` on release) |
 | **Website** | <https://danielmevit.github.io/laydown/> — Astro, in `site/`, deploys from `main` |
-| **GitHub releases** | **0.4.6**, all platforms — Windows (MSIX + portable), macOS (arm64 + Intel), Linux x86_64 |
+| **GitHub releases** | **0.4.7**, all platforms — Windows (MSIX + portable), macOS (arm64 + Intel), Linux x86_64 |
 | **Microsoft Store** | **Submitted 2026-07-18, outcome UNVERIFIED as of 2026-10-12 (no public listing found).** Package version 0.4.1. See §3. |
 | **Tests** | the full suite, run headless anywhere (`pytest`). CI gates every release on them. |
 | **License** | AGPL-3.0-only |
@@ -84,7 +84,7 @@ than the usual 1–3 days because a human reviews the `runFullTrust` justificati
   source, and Windows users get one-click install with **no certificate step**.
 - **If it asks a question** (most likely about runFullTrust): the justification in
   `docs/store/SUBMISSION.md` §8a is the standard, accepted answer — reply with that.
-- **The Store is behind GitHub** (Store = 0.4.1, GitHub = 0.4.6). This is fine — they're
+- **The Store is behind GitHub** (Store = 0.4.6 "Laydown - Print Layouts" submitted 2026-10-14, GitHub = 0.4.7). This is fine — they're
   independent channels. **After the 0.4.1 review clears, submit a Store update to catch up:**
   build the current version's Store package (§below) and upload it as a new submission. Don't
   update the package *while* the current one is in review, or review restarts.

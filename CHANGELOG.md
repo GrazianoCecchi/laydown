@@ -4,7 +4,9 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
-## [Unreleased]
+## [0.4.7] — 2026-10-15
+
+Sharper preview, safer presets and print-shop sheet sizes.
 
 - **Sharp preview on high-resolution screens.** On displays scaled to 150% or 200% (most laptops) the
   sheet preview came out soft: sheets were rendered with the extra pixels, then scaled down to normal size
