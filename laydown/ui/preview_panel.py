@@ -510,7 +510,14 @@ class SheetCanvas(QScrollArea):
             # zoom is against the sheet's own points, so convert out of render DPI.
             display_scale = zoom * self._base_dpi / self._render_dpi
             target_w = max(60, int(pm.width() * display_scale))
-            scaled = pm.scaledToWidth(target_w, Qt.TransformationMode.SmoothTransformation)
+            # Keep the screen's extra pixels: the render already asked MuPDF for them
+            # (_target_dpi multiplies by the device pixel ratio), so scaling down to
+            # logical width and letting Qt stretch it back up blurred the preview on
+            # 150-200% displays. Scale to physical pixels and tag the pixmap instead.
+            dpr = max(1.0, self.devicePixelRatioF())
+            scaled = pm.scaledToWidth(max(1, round(target_w * dpr)),
+                                      Qt.TransformationMode.SmoothTransformation)
+            scaled.setDevicePixelRatio(dpr)
             lbl.setPixmap(scaled)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setStyleSheet(f"border: 1px solid {t.BORDER};")

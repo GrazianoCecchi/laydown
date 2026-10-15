@@ -4,6 +4,13 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
+## [Unreleased]
+
+- **Sharp preview on high-resolution screens.** On displays scaled to 150% or 200% (most laptops) the
+  sheet preview came out soft: sheets were rendered with the extra pixels, then scaled down to normal size
+  and stretched back up by Windows. The preview now keeps the screen's full resolution. Pinned by
+  `tests/test_preview_hidpi.py`.
+
 ## [0.4.6] — 2026-10-12
 
 Output-correctness and robustness round from the 2026-10-12 review
