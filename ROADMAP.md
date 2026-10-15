@@ -7,6 +7,16 @@ starts (`_refs/ai-full-build-recipe.md` §4). Sizes: **S** ≈ a session, **M** 
 Laydown stays in **0.4.x while it is in beta** — every release is the next 0.4 patch; anything
 bigger is "later 0.4.x", not a new minor version.
 
+## 0.4.8 — next (MUST)
+- **First-launch onboarding** (owner requirement 2026-10-15, same for Vecto and Eqho). A short, skippable welcome on
+  the very first start, plain language:
+  1. What Laydown does: puts PDF pages on printing sheets — booklets, several pages per sheet, printer's marks.
+  2. Open a PDF (button, Ctrl+O or drag in) — offer a built-in sample PDF to try right away.
+  3. Pick Booklet or N-Up (one sentence each), then the sheet size.
+  4. Check the preview and the warnings bar.
+  5. Generate PDF.
+  "Don't show again" + reopen from Help. Remembered in settings. One window, a few steps, no pop-up chain.
+
 ## 0.4.7 — released 2026-10-15
 - **Sharp preview on HiDPI displays** — full resolution at 150–200 % Windows scaling (done on `dev`).
 - **Booklet "Blanks in the middle" keeps every page on its side** — with an odd number of blanks
