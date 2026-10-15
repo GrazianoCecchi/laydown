@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 authors = [
-    {name = "Daniel Mevit"}
+    # Public attribution: Daniel Mevit (@danielmevit)
+    {name = "Daniel Mitev"}
 ]
 classifiers = [
     "License :: OSI Approved :: GNU Affero General Public License v3 (AGPLv3)",

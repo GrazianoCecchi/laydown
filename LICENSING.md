@@ -6,6 +6,13 @@
 
 SPDX identifier: **AGPL-3.0-only** (see `pyproject.toml`).
 
+## Copyright
+
+```
+Copyright (C) 2026 Daniel Mitev
+Public attribution: Daniel Mevit (@danielmevit)
+```
+
 ## What this means (plain language)
 
 - **Copyleft:** If you distribute modified versions of this program, you must offer recipients the corresponding source under the same license (see the license text for exact conditions).
