@@ -221,6 +221,7 @@ jobs:
       - name: Publish
         uses: softprops/action-gh-release@v3
         with:
+          name: Laydown ${{ github.ref_name }}
           files: artifacts/*
           fail_on_unmatched_files: true
           body: |
