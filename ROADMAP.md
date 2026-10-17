@@ -218,3 +218,7 @@ Each item lands with a bench test, and only then does its schema control come ba
 - **Cloning IW's feature list.** It's the source of the promises the UI can't keep. Take its domain
   model and its one-engine-many-front-ends architecture; leave Shuffle, the barcode zoo, the
   licensing machinery, and the Acrobat plugin.
+
+## Later — to iron out (owner 2026-10-17)
+- **Guided first-run tour** (owner 2026-10-17, to iron out later): the onboarding opens as a popup first, then
+  points at the app's main controls one by one ("this is where…") — same approach in Eqho, Vecto and Laydown.
