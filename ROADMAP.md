@@ -20,6 +20,13 @@ bigger is "later 0.4.x", not a new minor version.
   menu) while the app is already running opened a SECOND window. A second launch must hand over to the running
   window (bring it to the front; pass along a PDF it was asked to open) and then exit.
 
+## Distribution — after 0.4.8 (owner 2026-10-17)
+- **winget listing** like Eqho's `damt.Eqho`: new-package PR to microsoft/winget-pkgs as `damt.Laydown`
+  (case-insensitive: `winget install damt.laydown` works). The MSIX is signed with Laydown's own certificate, which
+  Windows doesn't trust, so winget can't install it → list the portable ZIP (`zip` + nested `portable`) or sign the
+  MSIX with a trusted certificate first. Validate with `winget validate`, test-install, submit; later versions =
+  small update PRs (can be automated in CI).
+
 ## 0.4.9 — the app in many languages (owner 2026-10-16)
 - **Interface languages:** move every UI text (window, menus, buttons, tips, onboarding, messages, installer/Store
   strings) into translation files; follow the Windows display language, with a language picker in onboarding and
