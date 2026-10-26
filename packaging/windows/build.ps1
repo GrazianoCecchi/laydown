@@ -22,6 +22,7 @@
 param(
     [switch]$SkipPyInstaller,
     [switch]$SkipMsix,
+    [switch]$SkipInstaller,
     # -Store builds the Microsoft Store package: UNSIGNED (the Store signs it) and
     # stamped with the identity Partner Center assigns, taken from the environment:
     #   LAYDOWN_STORE_IDENTITY_NAME       e.g. 12345DanielMevit.Laydown
@@ -85,6 +86,23 @@ $zipPath = "$outDir\$portableName.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path "$portableDir\*" -DestinationPath $zipPath
 Write-Host "[ok] $zipPath" -ForegroundColor Green
+
+# -- 2b. Inno Setup (EXE installer) -------------------
+if (-not $SkipInstaller -and $arch -eq "x64") {
+    $iscc = @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($iscc) {
+        Write-Host "`n--- Inno Setup (EXE installer) ---" -ForegroundColor Cyan
+        & $iscc "/DMyAppVersion=$version" "$PSScriptRoot\installer.iss"
+        if ($LASTEXITCODE -ne 0) { Write-Error "Inno Setup failed" }
+        Write-Host "[ok] $outDir\Laydown-$version-windows-x64-setup.exe" -ForegroundColor Green
+    } else {
+        Write-Host "`n[skip] Inno Setup -- ISCC.exe not found" -ForegroundColor Yellow
+    }
+}
 
 # -- 3. MSIX (64-bit only) ----------------------------
 if ($SkipMsix -or $arch -eq "x86") {

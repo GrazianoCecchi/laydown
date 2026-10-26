@@ -6,6 +6,13 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-10-26
+
+- **Installer Windows (.exe) e supporto Inno Setup:**
+  - Creato lo script di installazione Inno Setup (`packaging/windows/installer.iss`) con compressione ultra (LZMA2), wizard moderno, lingua italiana e inglese, collegamenti nel menu Start e sul Desktop, e programma di disinstallazione.
+  - Aggiornato `packaging/windows/build.ps1` per rilevare automaticamente Inno Setup Compiler (`ISCC.exe`) e generare `dist/Laydown-0.4.8-windows-x64-setup.exe` accanto al pacchetto portatile `.zip`.
+  - Compilato con successo il bundle e generati i pacchetti di rilascio completi per Windows x64.
+
 - **Controlli numerici con frecce (SpinBox) e impostazione minima per Griglia personalizzata:**
   - **Frecce di incremento/decremento visibili per tutti gli SpinBox:** implementata la generazione e renderizzazione vettoriale (`_spin_arrow_png`) dei chevron `up` e `down` nel tema QSS dell'applicazione (`laydown.ui.theme`), garantendo che `QSpinBox` e `QDoubleSpinBox` mostrino chiaramente le frecce su/giù stilizzate con hover ed eliminando l'aspetto piatto da casella di testo.
   - **Inizializzazione a 1 per Griglia personalizzata:** selezionando *"Griglia personalizzata (Righe × Colonne)"*, i campi **Colonne** e **Righe** vengono automaticamente impostati a `1` sia nello store che nell'interfaccia.
