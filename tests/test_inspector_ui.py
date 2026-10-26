@@ -76,6 +76,37 @@ def test_inspector_dialog_rendering_and_interaction(app, tmp_path):
     cb_trim.setChecked(False)
     assert dialog._canvas._active_boxes.get("TrimBox") is False
 
+    # Verify tooltips on checkboxes and table items
+    assert "TrimBox" in cb_trim.toolTip()
+    assert "taglio" in cb_trim.toolTip().lower() or "rifilo" in cb_trim.toolTip().lower()
+
+    item_0 = dialog._boxes_table.item(0, 0)
+    assert item_0 is not None
+    assert "TrimBox" in item_0.toolTip()
+    assert "Dimensioni:" in item_0.toolTip()
+
+    # Table row selection highlights box on canvas
+    dialog._boxes_table.selectRow(0)
+    assert dialog._canvas._highlighted_box == "TrimBox"
+
+    # Test canvas hover / mouse event handling
+    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtGui import QMouseEvent
+    ev_move = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPointF(50.0, 50.0),
+        QPointF(50.0, 50.0),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    dialog._canvas.mouseMoveEvent(ev_move)
+    # Leave event clears highlight
+    from PyQt6.QtCore import QEvent
+    ev_leave = QEvent(QEvent.Type.Leave)
+    dialog._canvas.leaveEvent(ev_leave)
+    assert dialog._canvas._highlighted_box is None
+
     # Test zoom triggers without error
     dialog._canvas.zoom_in()
     dialog._canvas.zoom_out()

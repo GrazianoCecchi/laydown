@@ -6,6 +6,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Popup descrittivi ed evidenziazione interattiva per ciascun riquadro (Page Box):**
+  - Aggiunti popup informativi ricchi (HTML) per tutti i riquadri dello standard PDF (MediaBox, CropBox, BleedBox, TrimBox, ArtBox) che spiegano con chiarezza la funzione tipografica, le dimensioni correnti e lo stato (Dichiarato vs Derivato).
+  - I popup appaiono passando il cursore del mouse:
+    - Direttamente sopra il canvas sui bordi o all'interno di ciascun riquadro (con cursore a manina ed evidenziazione visiva immediata del box);
+    - Sulle caselle di spunta dei singoli riquadri;
+    - Su tutte le celle e righe della tabella dei riquadri pagina.
+  - La selezione di una riga nella tabella evidenzia in tempo reale il rispettivo riquadro sul canvas di anteprima.
+
 - **Correzione allineamento geometrico dei riquadri per PDF con origine negativa/offset (prestampa):**
   - Risolto un disallineamento critico in `geometry.source_boxes` e nell'Ispettore PDF presente su file generati da Adobe InDesign / Illustrator con crocini di taglio esterni (dove `TrimBox` è a `[0, 0, W, H]` e `MediaBox`/`CropBox` si estendono nello spazio negativo `[-36, -36, ...]`).
   - La conversione dei riquadri ora calcola accuratamente il vettore di traslazione verso lo spazio normalizzato `page.rect` (`dx = page.rect.x0 - crop.x0`, `dy = page.rect.y0 - crop.y0`) preservando la perfetta centratura e le distanze corrette su tutti e 4 i margini, con e senza rotazione di pagina.

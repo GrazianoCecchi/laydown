@@ -12,7 +12,7 @@ from PyQt6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy, QSpinBox,
-    QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QSplitter, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget,
 )
 
 import fitz
@@ -41,6 +41,79 @@ BOX_PEN_STYLES: Dict[str, Qt.PenStyle] = {
     "ArtBox": Qt.PenStyle.DotLine,
 }
 
+BOX_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
+    "MediaBox": {
+        "title": "MediaBox (Supporto fisico / Carta)",
+        "summary": "Limiti fisici massimi del foglio o del supporto di stampa.",
+        "desc": (
+            "Rappresenta l'intero formato della carta grezza. Contiene tutto ciò che compone la pagina: "
+            "il contenuto visibile, l'abbondanza (bleed), i crocini di registro e di taglio, le barre di calibrazione colore "
+            "e le informazioni informative di commessa esterne al rifilo."
+        ),
+    },
+    "CropBox": {
+        "title": "CropBox (Riquadro di ritaglio a video)",
+        "summary": "Area visualizzata a schermo dai lettori PDF e stampata per impostazione predefinita.",
+        "desc": (
+            "Definisce l'area della pagina mostrata a video in Adobe Acrobat o altri visualizzatori PDF. "
+            "In assenza di ritaglio esplicito, coincide esattamente con il MediaBox."
+        ),
+    },
+    "BleedBox": {
+        "title": "BleedBox (Riquadro di abbondanza / Al vivo)",
+        "summary": "Area comprensiva dell'abbondanza necessaria per il taglio professionale.",
+        "desc": (
+            "Rappresenta l'estensione del documento fino al vivo della pagina (solitamente +2 mm o +3 mm per lato rispetto al TrimBox). "
+            "La grafica e i fondini colorati devono estendersi fino al BleedBox per evitare sottili filetti bianchi sul bordo dopo il taglio con taglierina."
+        ),
+    },
+    "TrimBox": {
+        "title": "TrimBox (Riquadro di rifilo / Formato finito)",
+        "summary": "Dimensioni e confini del prodotto finito dopo il taglio tipografico.",
+        "desc": (
+            "È il riquadro fondamentale per l'imposizione e la stampa: definisce il formato netto del foglio ritagliato (es. A4, o 85×55 mm per biglietti da visita). "
+            "È lungo i bordi del TrimBox che la taglierina/ghigliottina effettua il taglio e dove cadono i crocini di taglio."
+        ),
+    },
+    "ArtBox": {
+        "title": "ArtBox (Riquadro grafica / Area utile)",
+        "summary": "Area del contenuto significativo o dell'area di sicurezza per il testo.",
+        "desc": (
+            "Definisce l'area che racchiude il contenuto significativo della pagina (es. la gabbia del testo o una grafica pubblicitaria all'interno di una pagina editoriale). "
+            "Se non specificato, eredita le dimensioni del CropBox."
+        ),
+    },
+}
+
+
+def box_tooltip_html(name: str, box: Optional[BoxInfo] = None) -> str:
+    """Generate rich, informative HTML tooltip explaining a PDF box."""
+    info = BOX_DESCRIPTIONS.get(name, {})
+    title = info.get("title", name)
+    summary = info.get("summary", "")
+    desc = info.get("desc", "")
+    color = BOX_COLORS.get(name, QColor("#38BDF8")).name()
+
+    dims_section = ""
+    if box:
+        status_str = "Dichiarato nel PDF" if box.is_explicit else "Derivato (fallback)"
+        status_col = "#10B981" if box.is_explicit else "#94A3B8"
+        dims_section = (
+            f"<div style='margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.15); font-size:11px;'>"
+            f"<b>Dimensioni:</b> {box.dimensions_mm_str} ({box.dimensions_pt_str})<br>"
+            f"<b>Stato:</b> <span style='color:{status_col}; font-weight:600;'>{status_str}</span>"
+            f"</div>"
+        )
+
+    return (
+        f"<div style='max-width:320px; font-family:sans-serif; color:#F8FAFC; padding:2px;'>"
+        f"<div style='font-size:12px; font-weight:bold; color:{color}; margin-bottom:3px;'>● {title}</div>"
+        f"<div style='font-size:11px; font-weight:600; color:#E2E8F0; margin-bottom:5px;'>{summary}</div>"
+        f"<div style='font-size:11px; color:#CBD5E1; line-height:1.4;'>{desc}</div>"
+        f"{dims_section}"
+        f"</div>"
+    )
+
 
 class _PageBoxCanvas(QWidget):
     """
@@ -62,6 +135,9 @@ class _PageBoxCanvas(QWidget):
         self._show_labels = True
         self._zoom = 1.0
         self._pixmap: Optional[QPixmap] = None
+        self._highlighted_box: Optional[str] = None
+        self._rendered_boxes: Dict[str, Tuple[QRectF, BoxInfo]] = {}
+        self.setMouseTracking(True)
         self.setStyleSheet(f"background: {t.BG};")
 
     def set_data(self, doc: fitz.Document, page_idx: int, page_info: PageInspection):
@@ -78,6 +154,11 @@ class _PageBoxCanvas(QWidget):
     def set_show_labels(self, show: bool):
         self._show_labels = show
         self.update()
+
+    def set_highlighted_box(self, name: Optional[str]):
+        if self._highlighted_box != name:
+            self._highlighted_box = name
+            self.update()
 
     def set_zoom(self, zoom: float):
         self._zoom = max(0.2, min(5.0, zoom))
@@ -141,6 +222,9 @@ class _PageBoxCanvas(QWidget):
         font = QFont(t.FONT_FAMILY, 9)
         painter.setFont(font)
 
+        # Clear previously recorded box geometries for hit testing
+        self._rendered_boxes.clear()
+
         # Order to draw: MediaBox -> CropBox -> BleedBox -> ArtBox -> TrimBox (TrimBox on top)
         draw_order = ["MediaBox", "CropBox", "BleedBox", "ArtBox", "TrimBox"]
 
@@ -159,14 +243,21 @@ class _PageBoxCanvas(QWidget):
             ph = (vy1 - vy0) * scale
 
             rect = QRectF(px0, py0, pw, ph)
+            self._rendered_boxes[name] = (rect, box)
+
             color = BOX_COLORS.get(name, QColor(t.ACCENT))
             pen_style = BOX_PEN_STYLES.get(name, Qt.PenStyle.SolidLine)
             pen_width = 2.0 if name == "TrimBox" else 1.5
 
-            # Semi-transparent wash for TrimBox
-            if name == "TrimBox":
+            is_highlighted = (name == self._highlighted_box)
+            if is_highlighted:
+                pen_width += 1.5
+                pen_style = Qt.PenStyle.SolidLine
+
+            # Semi-transparent wash for TrimBox or hovered/highlighted box
+            if name == "TrimBox" or is_highlighted:
                 fill_color = QColor(color)
-                fill_color.setAlpha(15)
+                fill_color.setAlpha(26 if is_highlighted else 15)
                 painter.fillRect(rect, fill_color)
 
             # Draw boundary rect
@@ -175,7 +266,7 @@ class _PageBoxCanvas(QWidget):
             painter.drawRect(rect)
 
             # Draw tag label in corner
-            if self._show_labels:
+            if self._show_labels or is_highlighted:
                 tag_text = f" {name}: {box.dimensions_mm_str} "
                 fm = painter.fontMetrics()
                 tw = fm.horizontalAdvance(tag_text) + 4
@@ -187,14 +278,69 @@ class _PageBoxCanvas(QWidget):
                 tag_rect = QRectF(tag_x, tag_y, tw, th)
 
                 bg_col = QColor(t.RAISED)
-                bg_col.setAlpha(220)
+                bg_col.setAlpha(240 if is_highlighted else 220)
                 painter.fillRect(tag_rect, bg_col)
-                painter.setPen(QPen(color, 1))
+                painter.setPen(QPen(color, 1.5 if is_highlighted else 1))
                 painter.drawRect(tag_rect)
                 painter.setPen(color)
                 painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, tag_text)
 
         painter.end()
+
+    def leaveEvent(self, event):
+        super().leaveEvent(event)
+        if self._highlighted_box is not None:
+            self._highlighted_box = None
+            self.update()
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        QToolTip.hideText()
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        pos = event.position()
+
+        # Prioritize innermost box: TrimBox -> BleedBox -> ArtBox -> CropBox -> MediaBox
+        check_order = ["TrimBox", "BleedBox", "ArtBox", "CropBox", "MediaBox"]
+        found_box = None
+
+        # 1. Edge proximity test (near perimeter lines within 6px)
+        tol = 6.0
+        for name in check_order:
+            if not self._active_boxes.get(name, False) or name not in self._rendered_boxes:
+                continue
+            rect, box_info = self._rendered_boxes[name]
+            on_left_right = ((abs(pos.x() - rect.left()) <= tol or abs(pos.x() - rect.right()) <= tol)
+                             and (rect.top() - tol <= pos.y() <= rect.bottom() + tol))
+            on_top_bottom = ((abs(pos.y() - rect.top()) <= tol or abs(pos.y() - rect.bottom()) <= tol)
+                             and (rect.left() - tol <= pos.x() <= rect.right() + tol))
+            if on_left_right or on_top_bottom:
+                found_box = (name, box_info)
+                break
+
+        # 2. Interior area test if not on edge
+        if not found_box:
+            for name in check_order:
+                if not self._active_boxes.get(name, False) or name not in self._rendered_boxes:
+                    continue
+                rect, box_info = self._rendered_boxes[name]
+                if rect.contains(pos):
+                    found_box = (name, box_info)
+                    break
+
+        if found_box:
+            name, box_info = found_box
+            if self._highlighted_box != name:
+                self._highlighted_box = name
+                self.update()
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            tip = box_tooltip_html(name, box_info)
+            QToolTip.showText(event.globalPosition().toPoint(), tip, self)
+        else:
+            if self._highlighted_box is not None:
+                self._highlighted_box = None
+                self.update()
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            QToolTip.hideText()
 
 
 class PdfInspectorDialog(QDialog):
@@ -349,6 +495,7 @@ class PdfInspectorDialog(QDialog):
         self._boxes_table.verticalHeader().setVisible(False)
         self._boxes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._boxes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._boxes_table.itemSelectionChanged.connect(self._on_table_selection_changed)
         self._boxes_table.setStyleSheet(
             f"QTableWidget {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER_SOFT};"
             f"                gridline-color: {t.BORDER_SOFT}; font-size: {t.TEXT_XS}px; }}"
@@ -368,6 +515,7 @@ class PdfInspectorDialog(QDialog):
             cb = QCheckBox(box_name)
             col = BOX_COLORS[box_name].name()
             cb.setChecked(self._active_boxes_default(box_name))
+            cb.setToolTip(box_tooltip_html(box_name))
             cb.setStyleSheet(
                 f"QCheckBox {{ color: {col}; font-weight: 600; font-size: {t.TEXT_2XS}px; }}"
                 f"QCheckBox::indicator:checked {{ background: {col}; border: 1px solid {col}; }}"
@@ -526,28 +674,33 @@ class PdfInspectorDialog(QDialog):
         self._boxes_table.setRowCount(len(boxes_list))
         for row, (name, box) in enumerate(boxes_list):
             color = BOX_COLORS.get(name, QColor(t.FG))
+            tip = box_tooltip_html(name, box)
 
             # Column 0: Name with colored badge
             item_name = QTableWidgetItem(f"● {name}")
             item_name.setForeground(color)
             item_name.setFont(QFont(t.FONT_FAMILY, 9, QFont.Weight.Bold))
+            item_name.setToolTip(tip)
             self._boxes_table.setItem(row, 0, item_name)
 
             # Column 1: Dimensions in mm
             item_mm = QTableWidgetItem(box.dimensions_mm_str)
             item_mm.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_mm.setToolTip(tip)
             self._boxes_table.setItem(row, 1, item_mm)
 
             # Column 2: Dimensions in pt
             item_pt = QTableWidgetItem(box.dimensions_pt_str)
             item_pt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             item_pt.setForeground(QColor(t.FG_MUTED))
+            item_pt.setToolTip(tip)
             self._boxes_table.setItem(row, 2, item_pt)
 
             # Column 3: Status (Dichiarato vs Derivato)
             status_text = "Dichiarato" if box.is_explicit else "Derivato"
             item_status = QTableWidgetItem(status_text)
             item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_status.setToolTip(tip)
             if box.is_explicit:
                 item_status.setForeground(QColor("#10B981"))  # Green
             else:
@@ -556,6 +709,16 @@ class PdfInspectorDialog(QDialog):
 
         # Update canvas
         self._canvas.set_data(self._doc, page_idx, page_info)
+
+    def _on_table_selection_changed(self):
+        row = self._boxes_table.currentRow()
+        if 0 <= row < self._boxes_table.rowCount():
+            item = self._boxes_table.item(row, 0)
+            if item:
+                box_name = item.text().replace("●", "").strip()
+                self._canvas.set_highlighted_box(box_name)
+        else:
+            self._canvas.set_highlighted_box(None)
 
     def _on_prev_page(self):
         if self._current_page_idx > 0:
