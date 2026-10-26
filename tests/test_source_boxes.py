@@ -252,3 +252,61 @@ class TestGeometryUnits:
         place, clip = source_boxes(page, SourceSettings())
         assert place == page.rect
         assert clip == place
+
+    def test_source_boxes_with_offset_cropbox_origin(self, tmp_path):
+        """Prepress PDFs (e.g. from InDesign/Illustrator with crop marks) often define
+        TrimBox at [0, 0, W, H] with MediaBox and CropBox extending into negative space
+        [-36, -36, W+36, H+36]. source_boxes must correctly align TrimBox inside page.rect
+        with 36pt margins, rather than placing its left edge at x=0."""
+        pdf_path = str(tmp_path / "offset_origin.pdf")
+        pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page
+   /Parent 2 0 R
+   /MediaBox [ -36 -36 276 192 ]
+   /CropBox [ -36 -36 276 192 ]
+   /TrimBox [ 0 0 240 156 ]
+   /Resources << >>
+   /Contents 4 0 R
+>>
+endobj
+4 0 obj
+<< /Length 0 >>
+stream
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000266 00000 n 
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+314
+%%EOF
+"""
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_content)
+
+        doc = fitz.open(pdf_path)
+        page = doc[0]
+        place, clip = source_boxes(page, SourceSettings(box=SourceBox.TRIM, bleed_mm=0))
+
+        # TrimBox must be positioned with 36pt margins on all 4 sides relative to page.rect
+        assert place.x0 == pytest.approx(36.0)
+        assert place.y0 == pytest.approx(36.0)
+        assert place.width == pytest.approx(240.0)
+        assert place.height == pytest.approx(156.0)
+        assert page.rect.width - place.x1 == pytest.approx(36.0)
+        assert page.rect.height - place.y1 == pytest.approx(36.0)
+        doc.close()
+

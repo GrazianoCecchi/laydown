@@ -127,9 +127,32 @@ def _is_box_explicit(doc: fitz.Document, page: fitz.Page, box_name: str) -> bool
         return False
 
 
-def _make_box_info(doc: fitz.Document, page: fitz.Page, name: str, raw_rect: fitz.Rect) -> BoxInfo:
+def _aligned_box(page: fitz.Page, name: str) -> fitz.Rect:
+    if name == "MediaBox":
+        mb = page.mediabox
+        mb_raw = page._other_box("MediaBox") if hasattr(page, "_other_box") else None
+        if mb_raw is not None:
+            return fitz.Rect(mb_raw[0], mb.y1 - mb_raw[3], mb_raw[2], mb.y1 - mb_raw[1])
+        return fitz.Rect(mb)
+    return fitz.Rect(getattr(page, name.lower()))
+
+
+def _box_as_rendered(page: fitz.Page, box: fitz.Rect) -> fitz.Rect:
+    """
+    Convert a raw unrotated box into page.rect coordinate space (the rendered space).
+    """
+    m = page.rotation_matrix
+    crop = page.cropbox * m
+    dx = page.rect.x0 - crop.x0
+    dy = page.rect.y0 - crop.y0
+    r = box * m
+    return fitz.Rect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
+
+
+def _make_box_info(doc: fitz.Document, page: fitz.Page, name: str) -> BoxInfo:
     is_explicit = _is_box_explicit(doc, page, name)
-    v_rect = raw_rect * page.rotation_matrix if page.rotation else raw_rect
+    raw_rect = _aligned_box(page, name)
+    v_rect = _box_as_rendered(page, raw_rect)
 
     w_pt = abs(v_rect.width)
     h_pt = abs(v_rect.height)
@@ -156,11 +179,11 @@ def inspect_page(doc: fitz.Document, page_index: int) -> PageInspection:
     page = doc[page_index]
     rot = page.rotation
 
-    mediabox = _make_box_info(doc, page, "MediaBox", page.mediabox)
-    cropbox = _make_box_info(doc, page, "CropBox", page.cropbox)
-    bleedbox = _make_box_info(doc, page, "BleedBox", page.bleedbox)
-    trimbox = _make_box_info(doc, page, "TrimBox", page.trimbox)
-    artbox = _make_box_info(doc, page, "ArtBox", page.artbox)
+    mediabox = _make_box_info(doc, page, "MediaBox")
+    cropbox = _make_box_info(doc, page, "CropBox")
+    bleedbox = _make_box_info(doc, page, "BleedBox")
+    trimbox = _make_box_info(doc, page, "TrimBox")
+    artbox = _make_box_info(doc, page, "ArtBox")
 
     boxes = {
         "MediaBox": mediabox,

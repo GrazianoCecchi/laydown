@@ -151,10 +151,10 @@ class _PageBoxCanvas(QWidget):
             if not box:
                 continue
 
-            # Visual coordinates relative to page origin
+            # Visual coordinates in page.rect (pixmap) space
             vx0, vy0, vx1, vy1 = box.visual_rect
-            px0 = ox + (vx0 - page.rect.x0) * scale
-            py0 = oy + (vy0 - page.rect.y0) * scale
+            px0 = ox + vx0 * scale
+            py0 = oy + vy0 * scale
             pw = (vx1 - vx0) * scale
             ph = (vy1 - vy0) * scale
 

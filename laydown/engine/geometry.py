@@ -98,26 +98,34 @@ def cell_grid(project: Project, cols: int, rows: int) -> List[fitz.Rect]:
 
 def _raw_box(page: fitz.Page, which: SourceBox) -> fitz.Rect:
     """
-    The requested box, in the page's visual (rotated) space.
+    The requested box, in the page's visual (rendered) space — page.rect's coordinate space.
 
-    PyMuPDF's box getters report UNROTATED coordinates while ``page.rect`` is the
-    rotated page, so on a /Rotate page the two live in different spaces and
-    intersecting them (``source_boxes`` does) silently crops artwork. Mapping
-    through ``rotation_matrix`` puts the box where the page is actually seen;
-    it is the identity for unrotated pages.
+    PyMuPDF's box getters report coordinates in the unrotated PDF space, which may have
+    an origin offset (e.g. MediaBox/CropBox starting at negative coordinates like [-36, -36])
+    and unrotated axes on a /Rotate page.
+    This converts the box into page.rect's space (origin (0, 0), rotated with the page),
+    so it matches where the artwork actually renders.
     """
     if which == SourceBox.MEDIA:
-        box = page.mediabox
+        mb = page.mediabox
+        mb_raw = page._other_box("MediaBox") if hasattr(page, "_other_box") else None
+        if mb_raw is not None:
+            box = fitz.Rect(mb_raw[0], mb.y1 - mb_raw[3], mb_raw[2], mb.y1 - mb_raw[1])
+        else:
+            box = fitz.Rect(mb)
     elif which == SourceBox.CROP:
-        box = page.cropbox
+        box = fitz.Rect(page.cropbox)
     elif which == SourceBox.BLEED:
-        box = page.bleedbox
+        box = fitz.Rect(page.bleedbox)
     else:
-        box = page.trimbox
+        box = fitz.Rect(page.trimbox)
 
-    if page.rotation:
-        box = box * page.rotation_matrix
-    return box
+    m = page.rotation_matrix
+    crop = page.cropbox * m
+    dx = page.rect.x0 - crop.x0
+    dy = page.rect.y0 - crop.y0
+    r = box * m
+    return fitz.Rect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
 
 
 def source_boxes(page: fitz.Page, source: SourceSettings) -> Tuple[fitz.Rect, fitz.Rect]:

@@ -6,6 +6,12 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Correzione allineamento geometrico dei riquadri per PDF con origine negativa/offset (prestampa):**
+  - Risolto un disallineamento critico in `geometry.source_boxes` e nell'Ispettore PDF presente su file generati da Adobe InDesign / Illustrator con crocini di taglio esterni (dove `TrimBox` è a `[0, 0, W, H]` e `MediaBox`/`CropBox` si estendono nello spazio negativo `[-36, -36, ...]`).
+  - La conversione dei riquadri ora calcola accuratamente il vettore di traslazione verso lo spazio normalizzato `page.rect` (`dx = page.rect.x0 - crop.x0`, `dy = page.rect.y0 - crop.y0`) preservando la perfetta centratura e le distanze corrette su tutti e 4 i margini, con e senza rotazione di pagina.
+  - La visualizzazione in sovrapposizione dell'Ispettore ora disegna il TrimBox e tutti gli altri riquadri esattamente allineati con i crocini di taglio e la grafica originale.
+  - Aggiunti test di regressione dedicati in `tests/test_source_boxes.py` e `tests/test_inspector.py`.
+
 - **Strumento di Ispezione PDF (PDF Inspector) con visualizzazione grafica dei riquadri:**
   - Aggiunto motore di analisi indipendente e senza dipendenze Qt (`laydown.engine.inspector`):
     - Estrazione completa delle proprietà del documento (nome file, percorso, dimensione formattata, versione PDF, numero pagine, titolo, autore, oggetto, creatore, produttore, date di creazione e modifica, crittografia).

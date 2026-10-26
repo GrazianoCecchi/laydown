@@ -130,3 +130,58 @@ def test_inspect_rotated_page(tmp_path):
     assert p.trimbox.is_explicit is True
     assert p.trimbox.width_pt == 460.0
     assert p.trimbox.height_pt == 280.0
+
+
+def test_inspect_negative_origin_boxes(tmp_path):
+    pdf_path = str(tmp_path / "negative_origin.pdf")
+    pdf_content = b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page
+   /Parent 2 0 R
+   /MediaBox [ -36 -36 276 192 ]
+   /CropBox [ -36 -36 276 192 ]
+   /TrimBox [ 0 0 240 156 ]
+   /Resources << >>
+   /Contents 4 0 R
+>>
+endobj
+4 0 obj
+<< /Length 0 >>
+stream
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000266 00000 n 
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+314
+%%EOF
+"""
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_content)
+
+    doc = fitz.open(pdf_path)
+    insp = inspect_document(doc, pdf_path)
+    doc.close()
+
+    p = insp.pages[0]
+    # In visual space (page.rect coordinates, where page.rect starts at 0, 0):
+    # TrimBox should have visual_rect starting at (36, 36) with width 240 and height 156
+    vx0, vy0, vx1, vy1 = p.trimbox.visual_rect
+    assert vx0 == pytest.approx(36.0)
+    assert vy0 == pytest.approx(36.0)
+    assert vx1 - vx0 == pytest.approx(240.0)
+    assert vy1 - vy0 == pytest.approx(156.0)
+
