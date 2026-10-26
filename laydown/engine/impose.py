@@ -95,7 +95,7 @@ def impose_detailed(
             page_indices = (
                 parse_page_range(expr, len(work_doc)) if expr else list(range(len(work_doc)))
             )
-            plan = sheet_plan(project, page_indices)
+            plan = sheet_plan(project, page_indices, src_doc=work_doc)
             return _render(project, work_doc, plan, output_path, progress_callback)
         finally:
             if work_doc is not src_doc:

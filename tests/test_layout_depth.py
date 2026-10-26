@@ -407,3 +407,120 @@ class TestStepAndRepeat:
         for p in res.placed[0]:
             assert p.page_number == 1
 
+    def test_step_and_repeat_adjacent_cells_touch_when_gutters_zero(self, source_pdf, out_path):
+        """When gutters are zero, adjacent cells touch edge-to-edge for single-cut trimming."""
+        src = source_pdf(n_pages=1, w_mm=85.0, h_mm=55.0)
+        project = a_project(
+            src, cols=4, rows=5,
+            repeat_mode=RepeatMode.FILL_SHEET,
+            gutter_h_mm=0.0,
+            gutter_v_mm=0.0,
+        )
+        res = impose_detailed(project, out_path())
+        placed = res.placed[0]
+        # Check horizontal adjacency: col 0 right edge equals col 1 left edge
+        for r in range(5):
+            for c in range(3):
+                idx = r * 4 + c
+                next_idx = idx + 1
+                assert placed[idx].trim.x1 == pytest.approx(placed[next_idx].trim.x0, abs=0.01)
+        # Check vertical adjacency: row 0 bottom edge equals row 1 top edge
+        for r in range(4):
+            for c in range(4):
+                idx = r * 4 + c
+                below_idx = (r + 1) * 4 + c
+                assert placed[idx].trim.y1 == pytest.approx(placed[below_idx].trim.y0, abs=0.01)
+
+    def test_step_and_repeat_gutter_spacing_matches_settings(self, source_pdf, out_path):
+        """Distance between adjacent cells matches gutter_h_mm and gutter_v_mm exactly."""
+        src = source_pdf(n_pages=1, w_mm=85.0, h_mm=55.0)
+        project = a_project(
+            src, cols=3, rows=3,
+            repeat_mode=RepeatMode.FILL_SHEET,
+            gutter_h_mm=4.0,
+            gutter_v_mm=2.5,
+        )
+        res = impose_detailed(project, out_path())
+        placed = res.placed[0]
+        # Horizontal gap
+        gap_h = placed[1].trim.x0 - placed[0].trim.x1
+        assert gap_h == pytest.approx(mm_to_pt(4.0), abs=0.01)
+        # Vertical gap
+        gap_v = placed[3].trim.y0 - placed[0].trim.y1
+        assert gap_v == pytest.approx(mm_to_pt(2.5), abs=0.01)
+
+    def test_step_and_repeat_centered_on_sheet_minus_margins(self, source_pdf, out_path):
+        """The entire placed grid is centered within sheet boundaries minus margins."""
+        src = source_pdf(n_pages=1, w_mm=85.0, h_mm=55.0)
+        project = a_project(
+            src, cols=4, rows=5,
+            repeat_mode=RepeatMode.FILL_SHEET,
+            gutter_h_mm=2.0,
+            gutter_v_mm=2.0,
+        )
+        project.sheet.margin_left_mm = 20.0
+        project.sheet.margin_right_mm = 10.0
+        project.sheet.margin_top_mm = 15.0
+        project.sheet.margin_bottom_mm = 5.0
+
+        from laydown.engine.geometry import sheet_size_pt, margins_pt
+        sheet_w, sheet_h = sheet_size_pt(project)
+        ml, mr, mt, mb = margins_pt(project)
+
+        res = impose_detailed(project, out_path())
+        placed = res.placed[0]
+
+        min_x = min(p.trim.x0 for p in placed)
+        max_x = max(p.trim.x1 for p in placed)
+        min_y = min(p.trim.y0 for p in placed)
+        max_y = max(p.trim.y1 for p in placed)
+
+        left_dist = min_x - ml
+        right_dist = (sheet_w - mr) - max_x
+        top_dist = min_y - mt
+        bottom_dist = (sheet_h - mb) - max_y
+
+        assert left_dist == pytest.approx(right_dist, abs=0.05)
+        assert top_dist == pytest.approx(bottom_dist, abs=0.05)
+
+    def test_step_and_repeat_respects_source_box(self, tmp_path, out_path):
+        """Cell dimensions and spacing adapt to the selected SourceBox (TrimBox vs MediaBox)."""
+        import fitz
+        from laydown.engine.data_model import SourceBox
+
+        pdf_path = str(tmp_path / "boxes_test.pdf")
+        doc = fitz.open()
+        p = doc.new_page(width=mm_to_pt(100), height=mm_to_pt(70))
+        # Set TrimBox smaller than MediaBox (85 x 55 mm centered inside 100 x 70 mm)
+        trim_r = fitz.Rect(mm_to_pt(7.5), mm_to_pt(7.5), mm_to_pt(92.5), mm_to_pt(62.5))
+        p.set_trimbox(trim_r)
+        doc.save(pdf_path)
+        doc.close()
+
+        # Test with SourceBox.TRIM
+        project_trim = a_project(
+            pdf_path, cols=2, rows=2,
+            repeat_mode=RepeatMode.FILL_SHEET,
+            gutter_h_mm=0.0,
+            gutter_v_mm=0.0,
+        )
+        project_trim.source.box = SourceBox.TRIM
+        res_trim = impose_detailed(project_trim, out_path())
+        t0 = res_trim.placed[0][0].trim
+        assert t0.width == pytest.approx(mm_to_pt(85.0), abs=0.05)
+        assert t0.height == pytest.approx(mm_to_pt(55.0), abs=0.05)
+
+        # Test with SourceBox.MEDIA
+        project_media = a_project(
+            pdf_path, cols=2, rows=2,
+            repeat_mode=RepeatMode.FILL_SHEET,
+            gutter_h_mm=0.0,
+            gutter_v_mm=0.0,
+        )
+        project_media.source.box = SourceBox.MEDIA
+        res_media = impose_detailed(project_media, out_path())
+        m0 = res_media.placed[0][0].trim
+        assert m0.width == pytest.approx(mm_to_pt(100.0), abs=0.05)
+        assert m0.height == pytest.approx(mm_to_pt(70.0), abs=0.05)
+
+

@@ -18,6 +18,7 @@ All rects are PDF points in PyMuPDF's top-left coordinate space.
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 import math
+import os
 
 import fitz
 
@@ -92,8 +93,16 @@ def grid_for(layout) -> Tuple[int, int]:
         ) from None
 
 
-def cell_grid(project: Project, cols: int, rows: int) -> List[fitz.Rect]:
+def cell_grid(
+    project: Project,
+    cols: int,
+    rows: int,
+    item_size: Optional[Tuple[float, float]] = None,
+) -> List[fitz.Rect]:
     """The cols×rows cells of a sheet, in reading order."""
+    if project.layout.repeat_mode != RepeatMode.OFF:
+        return step_and_repeat_grid(project, cols, rows, item_size=item_size)
+
     sheet_w, sheet_h = sheet_size_pt(project)
     ml, mr, mt, mb = margins_pt(project)
     gh = mm_to_pt(project.layout.gutter_h_mm)
@@ -167,6 +176,101 @@ def source_boxes(page: fitz.Page, source: SourceSettings) -> Tuple[fitz.Rect, fi
     if clip.is_empty:
         return box, box
     return box, clip
+
+
+def get_source_box_size_pt(
+    project: Project,
+    doc: Optional[fitz.Document] = None,
+    page_index: int = 0,
+) -> Optional[Tuple[float, float]]:
+    """Return (width, height) in points of the selected source box for project.source."""
+    if doc is not None and len(doc) > 0:
+        idx = max(0, min(page_index, len(doc) - 1))
+        place, _ = source_boxes(doc[idx], project.source)
+        return place.width, place.height
+    if project.source_pdf_path and os.path.isfile(project.source_pdf_path):
+        try:
+            d = fitz.open(project.source_pdf_path)
+            try:
+                if len(d) > 0:
+                    idx = max(0, min(page_index, len(d) - 1))
+                    place, _ = source_boxes(d[idx], project.source)
+                    return place.width, place.height
+            finally:
+                d.close()
+        except Exception:
+            return None
+    return None
+
+
+def step_and_repeat_grid(
+    project: Project,
+    cols: int,
+    rows: int,
+    item_size: Optional[Tuple[float, float]] = None,
+) -> List[fitz.Rect]:
+    """
+    The cols×rows cells for Step & Repeat / Page Duplication mode.
+
+    Each cell has the exact dimension of the active source box (TrimBox, MediaBox, etc.).
+    Adjacent cells are placed side-by-side separated by the exact horizontal and vertical gutters.
+    The entire block of cols×rows cells is centered within the sheet minus margins.
+    """
+    sheet_w, sheet_h = sheet_size_pt(project)
+    ml, mr, mt, mb = margins_pt(project)
+    gh = mm_to_pt(project.layout.gutter_h_mm)
+    gv = mm_to_pt(project.layout.gutter_v_mm)
+    avail_w = sheet_w - ml - mr
+    avail_h = sheet_h - mt - mb
+
+    if avail_w <= 0 or avail_h <= 0:
+        raise ValueError("Margins too large for sheet size")
+
+    if item_size is None:
+        item_size = get_source_box_size_pt(project)
+
+    if item_size is None or item_size[0] <= 0 or item_size[1] <= 0:
+        cell_w = (avail_w - (cols - 1) * gh) / cols
+        cell_h = (avail_h - (rows - 1) * gv) / rows
+        if cell_w <= 0 or cell_h <= 0:
+            raise ValueError("Margins/gutters too large for sheet size")
+        cells = []
+        for i in range(cols * rows):
+            col, row = i % cols, i // cols
+            x0 = ml + col * (cell_w + gh)
+            y0 = mt + row * (cell_h + gv)
+            cells.append(fitz.Rect(x0, y0, x0 + cell_w, y0 + cell_h))
+        return cells
+
+    pw, ph = item_size
+    if project.layout.auto_rotate:
+        w_up = cols * pw + (cols - 1) * gh
+        h_up = rows * ph + (rows - 1) * gv
+        w_rot = cols * ph + (cols - 1) * gh
+        h_rot = rows * pw + (rows - 1) * gv
+        fits_up = (w_up <= avail_w + 0.1) and (h_up <= avail_h + 0.1)
+        fits_rot = (w_rot <= avail_w + 0.1) and (h_rot <= avail_h + 0.1)
+        if fits_rot and not fits_up:
+            pw, ph = ph, pw
+        elif not fits_up and not fits_rot:
+            scale_up = min(avail_w / max(1e-6, w_up), avail_h / max(1e-6, h_up))
+            scale_rot = min(avail_w / max(1e-6, w_rot), avail_h / max(1e-6, h_rot))
+            if scale_rot > scale_up:
+                pw, ph = ph, pw
+
+    total_w = cols * pw + (cols - 1) * gh
+    total_h = rows * ph + (rows - 1) * gv
+
+    start_x = ml + (avail_w - total_w) / 2.0
+    start_y = mt + (avail_h - total_h) / 2.0
+
+    cells = []
+    for i in range(cols * rows):
+        col, row = i % cols, i // cols
+        x0 = start_x + col * (pw + gh)
+        y0 = start_y + row * (ph + gv)
+        cells.append(fitz.Rect(x0, y0, x0 + pw, y0 + ph))
+    return cells
 
 
 # ── fitting a page into a cell ───────────────────────
@@ -432,13 +536,18 @@ class Sheet:
     total: int                       # physical sheets in the job
     side: str = ""                   # "", "Front" or "Back"
     fold_x: Optional[float] = None   # x of the fold line, booklet only
+    grid: Optional[List[fitz.Rect]] = None
 
     @property
     def cells(self) -> List[fitz.Rect]:
         return [p.cell for p in self.placements]
 
 
-def sheet_plan(project: Project, page_indices: List[int]) -> List[Sheet]:
+def sheet_plan(
+    project: Project,
+    page_indices: List[int],
+    src_doc: Optional[fitz.Document] = None,
+) -> List[Sheet]:
     """
     Plan the whole job: which source page goes in which cell of which sheet.
 
@@ -447,12 +556,15 @@ def sheet_plan(project: Project, page_indices: List[int]) -> List[Sheet]:
     """
     if project.layout.layout_type == LayoutType.BOOKLET:
         return _plan_booklet(project, page_indices)
-    return _plan_nup(project, page_indices)
+    return _plan_nup(project, page_indices, src_doc=src_doc)
 
 
-def _plan_nup(project: Project, page_indices: List[int]) -> List[Sheet]:
+def _plan_nup(
+    project: Project,
+    page_indices: List[int],
+    src_doc: Optional[fitz.Document] = None,
+) -> List[Sheet]:
     cols, rows = grid_for(project.layout)
-    cells = cell_grid(project, cols, rows)
     per_sheet = cols * rows
 
     mode = project.layout.repeat_mode
@@ -474,12 +586,19 @@ def _plan_nup(project: Project, page_indices: List[int]) -> List[Sheet]:
     sheets = []
     for si in range(num_sheets):
         placements = []
+        if mode != RepeatMode.OFF and n > 0:
+            first_idx = effective_indices[si * per_sheet] if si * per_sheet < n else 0
+            item_size = get_source_box_size_pt(project, doc=src_doc, page_index=first_idx)
+            cells = cell_grid(project, cols, rows, item_size=item_size)
+        else:
+            cells = cell_grid(project, cols, rows)
+
         for ci in range(per_sheet):
             idx = si * per_sheet + ci
             if idx >= n:
                 break
             placements.append(Placement(cells[ci], effective_indices[idx]))
-        sheets.append(Sheet(placements=placements, number=si + 1, total=num_sheets))
+        sheets.append(Sheet(placements=placements, number=si + 1, total=num_sheets, grid=cells))
     return sheets
 
 
@@ -563,7 +682,8 @@ def bleed_caps(
 
     cols, rows = grid_for(project.layout)
     col = row = None
-    for i, c in enumerate(cell_grid(project, cols, rows)):
+    cells = (sheet.grid if sheet and sheet.grid else None) or cell_grid(project, cols, rows)
+    for i, c in enumerate(cells):
         if abs(c.x0 - cell.x0) < 0.1 and abs(c.y0 - cell.y0) < 0.1:
             col, row = i % cols, i // cols
             break

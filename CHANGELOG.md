@@ -6,6 +6,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Posizionamento affiancato e centratura Step & Repeat (Ripetizione pagina per riempire il foglio):**
+  - **Posizionamento affiancato (Side-by-side):** nella modalità di ripetizione pagina (`FILL_SHEET` e `COPIES`), ciascuna copia viene posizionata esattamente con le dimensioni del box selezionato dall'utente (TrimBox, MediaBox, CropBox, ecc.) invece di espandere le celle all'intero foglio con spaziatura interna indesiderata.
+  - **Centratura rispetto all'area utile del foglio:** l'intero blocco delle copie (`cols × rows`) viene centrato perfettamente all'interno del foglio sottraendo i margini impostati (`start_x = ml + (avail_w - total_w)/2`, `start_y = mt + (avail_h - total_h)/2`), garantendo margini residui simmetrici a sinistra/destra e in alto/basso.
+  - **Distanze e spaziatura orizzontale e verticale esatte:** lo spazio tra copie adiacenti rispetta al millimetro le impostazioni delle caselle di spaziatura (`gutter_h_mm` e `gutter_v_mm`). Con spaziatura a zero, i bordi delle copie combaciano perfettamente a filo (taglio unico / single cut) per il taglio tipografico rapido con taglierina o ghigliottina.
+  - **Riferimento dinamico al riquadro sorgente selezionato:** le dimensioni di ogni copia e le relative distanze di taglio fanno riferimento in tempo reale al riquadro scelto nel combobox dei riquadri sorgente (`SourceBox.TRIM`, `MEDIA`, `CROP`, `BLEED`).
+  - **Supporto `auto_rotate` coerente:** se la rotazione automatica è attiva, l'algoritmo valuta se orientare le copie a 90° per consentire alla griglia di adattarsi all'area utile del foglio senza sbordare o minimizzando la riduzione.
+  - Aggiornati `laydown/engine/geometry.py` (`step_and_repeat_grid`, `cell_grid`, `sheet_plan`, `bleed_caps`) e `laydown/engine/impose.py`, con test completi in `tests/test_layout_depth.py`.
+
 - **Ripetizione e Duplicazione pagine (Step & Repeat / Riempi foglio):**
   - Implementata la modalità di duplicazione e ripetizione per layout N-Up (`RepeatMode`):
     - **Pagine consecutive (nessuna replica):** modalità tradizionale per documenti multipagina ordinati.
