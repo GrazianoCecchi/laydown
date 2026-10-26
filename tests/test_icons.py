@@ -90,3 +90,10 @@ class TestWiredIntoTheWindow:
             offset = sum(xs) / len(xs) - width / 2
             assert abs(offset) < 4, f"tab {i} icon off-centre by {offset:.1f}px"
         w.close()
+
+    def test_spinbox_arrow_pngs_are_created(self, app):
+        from laydown.ui.theme import _spin_arrow_png
+        up = _spin_arrow_png("up")
+        down = _spin_arrow_png("down")
+        assert os.path.isfile(up) and os.path.getsize(up) > 0
+        assert os.path.isfile(down) and os.path.getsize(down) > 0

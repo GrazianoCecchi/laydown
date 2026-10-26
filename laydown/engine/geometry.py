@@ -81,8 +81,8 @@ def grid_for(layout) -> Tuple[int, int]:
                 f"rows and cols must be at least 1, got {layout.rows}×{layout.cols}")
         return layout.cols, layout.rows
     if layout.nup == 0:
-        cols = layout.cols if layout.cols >= 1 else 2
-        rows = layout.rows if layout.rows >= 1 else 2
+        cols = layout.cols if layout.cols and layout.cols >= 1 else 1
+        rows = layout.rows if layout.rows and layout.rows >= 1 else 1
         return cols, rows
     try:
         return _NUP_GRIDS[layout.nup]

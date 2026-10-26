@@ -144,6 +144,52 @@ def apply(app) -> None:
 
 
 _COMBO_ARROW_PATH = None
+_SPIN_UP_ARROW_PATH = None
+_SPIN_DOWN_ARROW_PATH = None
+
+
+def _spin_arrow_png(direction: str) -> str:
+    """Render a Lucide chevron-up or chevron-down to a PNG and return its path for QSS."""
+    global _SPIN_UP_ARROW_PATH, _SPIN_DOWN_ARROW_PATH
+    cached = _SPIN_UP_ARROW_PATH if direction == "up" else _SPIN_DOWN_ARROW_PATH
+    if cached and os.path.exists(cached):
+        return cached
+    try:
+        from PyQt6.QtCore import QRectF, Qt, QStandardPaths
+        from PyQt6.QtGui import QImage, QPainter
+        from PyQt6.QtSvg import QSvgRenderer
+
+        path_d = "m18 15-6-6-6 6" if direction == "up" else "m6 9 6 6 6-6"
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+            f'stroke="{FG_MUTED}" stroke-width="3" stroke-linecap="round" '
+            f'stroke-linejoin="round"><path d="{path_d}"/></svg>'
+        ).encode("utf-8")
+        size = 20
+        renderer = QSvgRenderer(svg)
+        image = QImage(size, size, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        renderer.render(painter, QRectF(0, 0, size, size))
+        painter.end()
+
+        cache = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+        fname = f"spin_{direction}_arrow.png"
+        if cache:
+            os.makedirs(cache, exist_ok=True)
+            path = os.path.join(cache, fname)
+        else:
+            path = os.path.join(tempfile.mkdtemp(prefix="laydown-"), fname)
+        image.save(path)
+        formatted = path.replace(os.sep, "/")
+        if direction == "up":
+            _SPIN_UP_ARROW_PATH = formatted
+        else:
+            _SPIN_DOWN_ARROW_PATH = formatted
+        return formatted
+    except Exception:
+        return ""
 
 
 def _combo_arrow_png() -> str:
@@ -246,12 +292,39 @@ QComboBox QAbstractItemView {{
     border-radius: {RADIUS_MD}px; padding: {SPACE_1}px; outline: none;
     selection-background-color: {ACCENT}; selection-color: {ACCENT_FG};
 }}
-QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox, QDoubleSpinBox {{
+    padding-right: 20px;
+}}
+QSpinBox::up-button, QDoubleSpinBox::up-button {{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    height: {CONTROL_H // 2 - 2}px;
+    background: transparent;
+    border: none;
+    border-top-right-radius: {RADIUS_MD}px;
+}}
 QSpinBox::down-button, QDoubleSpinBox::down-button {{
-    background: transparent; border: none; width: 14px;
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    height: {CONTROL_H // 2 - 2}px;
+    background: transparent;
+    border: none;
+    border-bottom-right-radius: {RADIUS_MD}px;
 }}
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{ background: {HOVER_WASH}; }}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+    image: url("{_spin_arrow_png('up')}");
+    width: 8px;
+    height: 8px;
+}}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+    image: url("{_spin_arrow_png('down')}");
+    width: 8px;
+    height: 8px;
+}}
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
     color: {FG_FAINT}; background: {mix(INPUT_BG, BG, 0.5)};
 }}

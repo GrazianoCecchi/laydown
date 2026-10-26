@@ -126,6 +126,14 @@ class ValueStore(QObject):
         if record:
             self._push_undo()
         self._values[target] = value
+        if target == "layout.nup" and value == 0:
+            if int(self._values.get("layout.cols") or 0) < 1:
+                self._values["layout.cols"] = 1
+            if int(self._values.get("layout.rows") or 0) < 1:
+                self._values["layout.rows"] = 1
+        elif target in ("layout.cols", "layout.rows") and self._values.get("layout.nup") == 0:
+            if isinstance(value, (int, float)) and value < 1:
+                self._values[target] = 1
         if not self._batching:
             self.changed.emit()
 
@@ -249,9 +257,12 @@ def _build_control(control: Control, store: ValueStore):
             widget.valueChanged.connect(lambda v, c=control: store.set(c.target, v))
         else:
             widget = QSpinBox()
-            widget.setRange(int(control.minimum), int(control.maximum))
+            min_val = int(control.minimum)
+            max_val = int(control.maximum)
+            widget.setRange(min_val, max_val)
             widget.setSingleStep(int(control.step) or 1)
-            widget.setValue(int(value or 0))
+            init_val = int(value) if value is not None and int(value) >= min_val else int(control.default or min_val or 1)
+            widget.setValue(init_val)
             widget.valueChanged.connect(lambda v, c=control: store.set(c.target, v))
         if control.suffix and not is_length(control):
             widget.setSuffix(control.suffix)
@@ -339,8 +350,16 @@ class SectionWidget(QWidget):
                     index = widget.findData(value)
                     if index >= 0:
                         widget.setCurrentIndex(index)
-                elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-                    widget.setValue(value or 0)
+                elif isinstance(widget, QSpinBox):
+                    val = int(value or 0)
+                    if val < widget.minimum():
+                        val = widget.minimum()
+                    widget.setValue(val)
+                elif isinstance(widget, QDoubleSpinBox):
+                    val = float(value or 0.0)
+                    if val < widget.minimum():
+                        val = widget.minimum()
+                    widget.setValue(val)
                 elif isinstance(widget, QLineEdit):
                     widget.setText(str(value or ""))
             finally:
@@ -384,6 +403,7 @@ class SchemaTab(QWidget):
 
     def refresh(self, values: dict) -> None:
         for section in self.sections:
+            section.sync_from_store(values)
             section.refresh(values)
 
     def sync_from_store(self, values: dict) -> None:

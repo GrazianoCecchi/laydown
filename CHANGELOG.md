@@ -6,6 +6,12 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Controlli numerici con frecce (SpinBox) e impostazione minima per Griglia personalizzata:**
+  - **Frecce di incremento/decremento visibili per tutti gli SpinBox:** implementata la generazione e renderizzazione vettoriale (`_spin_arrow_png`) dei chevron `up` e `down` nel tema QSS dell'applicazione (`laydown.ui.theme`), garantendo che `QSpinBox` e `QDoubleSpinBox` mostrino chiaramente le frecce su/giù stilizzate con hover ed eliminando l'aspetto piatto da casella di testo.
+  - **Inizializzazione a 1 per Griglia personalizzata:** selezionando *"Griglia personalizzata (Righe × Colonne)"*, i campi **Colonne** e **Righe** vengono automaticamente impostati a `1` sia nello store che nell'interfaccia.
+  - **Blocco e controllo anti-zero:** impostato il valore minimo rigoroso a `1` (`minimum=1`) sia a livello di schema (`schema.py`), che di widget (`QSpinBox.setRange(1, 50)`), che di logica (`panel.ValueStore` e `geometry.grid_for`). La freccia giù non consente di scendere sotto 1 e non è possibile inserire valori nulli o negativi.
+  - Aggiunti test di regressione in `tests/test_panel.py` e `tests/test_icons.py`.
+
 - **Opzione Crocini di taglio solo perimetrali (esclusione crocini interni):**
   - Aggiunta l'opzione `crop_outer_only` in `MarkItem` e nell'interfaccia utente (scheda **Segni** > **Crocini di taglio** > casella di spunta *"Solo perimetrali (escludi interni)"*).
   - Quando attiva, il motore di imposizione (`laydown.engine.marks._draw_crop_marks_outer`):

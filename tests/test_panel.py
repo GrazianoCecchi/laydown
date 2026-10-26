@@ -370,3 +370,30 @@ class TestWidgetsFollowTheStore:
                     if control.type is ControlType.COLLECTION:
                         continue
                     assert control.target in bound, f"{control.target} is not resyncable"
+
+    def test_custom_grid_defaults_to_one_and_prevents_zero(self, app, store):
+        from PyQt6.QtWidgets import QSpinBox
+        page = self._layout_tab(store)
+        # Select custom grid (nup=0)
+        store.set("layout.nup", 0)
+        page.refresh(store.values())
+
+        assert store.get("layout.cols") == 1
+        assert store.get("layout.rows") == 1
+
+        cols_widget = self._bound(page, "layout.cols")
+        rows_widget = self._bound(page, "layout.rows")
+
+        assert isinstance(cols_widget, QSpinBox)
+        assert isinstance(rows_widget, QSpinBox)
+        assert cols_widget.minimum() == 1
+        assert rows_widget.minimum() == 1
+        assert cols_widget.value() == 1
+        assert rows_widget.value() == 1
+
+        # Controls must not allow zero or negative values
+        store.set("layout.cols", 0)
+        assert store.get("layout.cols") == 1
+        cols_widget.setValue(0)
+        assert cols_widget.value() == 1
+
