@@ -19,6 +19,12 @@ _AVAILABLE = [
     PreprocessorType.REORDER_PAGES,
 ]
 
+PREPROCESSOR_TYPE_LABELS = {
+    PreprocessorType.ROTATE_PAGES: "Ruota pagine",
+    PreprocessorType.SCALE_PAGES: "Scala pagine",
+    PreprocessorType.REORDER_PAGES: "Riordina pagine",
+}
+
 
 class PreprocessorsTab(QWidget):
     changed = pyqtSignal()
@@ -34,7 +40,7 @@ class PreprocessorsTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        lbl = QLabel("Page transforms applied before imposition.")
+        lbl = QLabel("Trasformazioni applicate alle pagine prima dell'imposizione.")
         lbl.setWordWrap(True)
         lbl.setStyleSheet(f"color:{t.FG_MUTED}; font-size:{t.TEXT_2XS}px; margin-bottom:6px;")
         root.addWidget(lbl)
@@ -46,7 +52,7 @@ class PreprocessorsTab(QWidget):
         self._list.setMaximumHeight(180)
         root.addWidget(self._list)
 
-        self._empty = QLabel("No transforms — pages are imposed as they are.")
+        self._empty = QLabel("Nessuna trasformazione — le pagine vengono impaginate così come sono.")
         self._empty.setWordWrap(True)
         self._empty.setStyleSheet(
             f"color:{t.FG_FAINT}; font-size:{t.TEXT_2XS}px; padding:2px 2px 6px 2px;")
@@ -55,7 +61,7 @@ class PreprocessorsTab(QWidget):
         btn_row = QHBoxLayout()
         self._add_combo = QComboBox()
         for kind in _AVAILABLE:
-            self._add_combo.addItem(kind.value, kind)
+            self._add_combo.addItem(PREPROCESSOR_TYPE_LABELS.get(kind, kind.value), kind)
         btn_row.addWidget(self._add_combo, stretch=1)
 
         add_btn = QPushButton("+")
@@ -70,7 +76,7 @@ class PreprocessorsTab(QWidget):
         root.addLayout(btn_row)
 
         # Settings area (stacked for different types)
-        self._settings_group = QGroupBox("Settings")
+        self._settings_group = QGroupBox("Impostazioni")
         settings_layout = QVBoxLayout(self._settings_group)
 
         self._stack = QStackedWidget()
@@ -86,7 +92,7 @@ class PreprocessorsTab(QWidget):
         for a in RotateAngle:
             self._rotate_combo.addItem(f"{a.value}°", a)
         self._rotate_combo.currentIndexChanged.connect(self._on_param_changed)
-        rl.addRow("Angle:", self._rotate_combo)
+        rl.addRow("Angolo:", self._rotate_combo)
         self._stack.addWidget(rot_w)
 
         # 2 — Scale
@@ -98,16 +104,16 @@ class PreprocessorsTab(QWidget):
         self._scale_spin.setSingleStep(0.1)
         self._scale_spin.setSuffix("×")
         self._scale_spin.valueChanged.connect(self._on_param_changed)
-        sl.addRow("Factor:", self._scale_spin)
+        sl.addRow("Fattore:", self._scale_spin)
         self._stack.addWidget(sc_w)
 
         # 3 — Reorder
         ro_w = QWidget()
         ol = QFormLayout(ro_w)
         self._order_edit = QLineEdit()
-        self._order_edit.setPlaceholderText("reverse  or  4,3,2,1")
+        self._order_edit.setPlaceholderText("inverso  oppure  4,3,2,1")
         self._order_edit.textChanged.connect(self._on_param_changed)
-        ol.addRow("Order:", self._order_edit)
+        ol.addRow("Ordine:", self._order_edit)
         self._stack.addWidget(ro_w)
 
         root.addWidget(self._settings_group)
@@ -129,7 +135,8 @@ class PreprocessorsTab(QWidget):
         self._list.clear()
         for s in self._steps:
             prefix = "✓" if s.enabled else "✗"
-            self._list.addItem(f"{prefix}  {s.type.value}")
+            label = PREPROCESSOR_TYPE_LABELS.get(s.type, s.type.value)
+            self._list.addItem(f"{prefix}  {label}")
         self._settings_group.setVisible(False)
         self._empty.setVisible(not self._steps)
 

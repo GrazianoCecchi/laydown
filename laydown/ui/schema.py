@@ -85,7 +85,34 @@ def _enum_options(enum_cls) -> Tuple[Tuple[Any, str], ...]:
     return tuple((member, member.value) for member in enum_cls)
 
 
-_PRESET_OPTIONS = tuple((k, k) for k in SHEET_PRESETS_MM) + (("Custom", "Custom"),)
+_SOURCE_BOX_OPTIONS = (
+    (SourceBox.MEDIA, "Media Box"),
+    (SourceBox.CROP, "Crop Box"),
+    (SourceBox.TRIM, "Trim Box"),
+    (SourceBox.BLEED, "Bleed Box"),
+)
+
+_LAYOUT_OPTIONS = (
+    (LayoutType.NUP, "N-Up"),
+    (LayoutType.BOOKLET, "Opuscolo"),
+)
+
+_SCALING_OPTIONS = (
+    (PageScaling.ACTUAL_SIZE, "Dim. reale"),
+    (PageScaling.FIT_TO_CELL, "Adatta a cella"),
+)
+
+_BOOKLET_MODE_OPTIONS = (
+    (BookletMode.SADDLE_STITCH, "P. metallico"),
+    (BookletMode.PERFECT_BOUND, "Brossura"),
+)
+
+_ORIENTATION_OPTIONS = (
+    (Orientation.LANDSCAPE, "Orizzontale"),
+    (Orientation.PORTRAIT, "Verticale"),
+)
+
+_PRESET_OPTIONS = tuple((k, k) for k in SHEET_PRESETS_MM) + (("Custom", "Personalizzato"),)
 
 _IS_BOOKLET = When(target="layout.layout_type", equals=LayoutType.BOOKLET)
 _IS_NUP = When(target="layout.layout_type", equals=LayoutType.NUP)
@@ -93,45 +120,46 @@ _IS_NUP = When(target="layout.layout_type", equals=LayoutType.NUP)
 
 SCHEMA: Tuple[Tab, ...] = (
     Tab(
-        name="Source",
+        name="Origine",
         sections=(
             Section(
-                title="Page Box",
-                entity="the incoming pages",
+                title="Riquadro pagina",
+                entity="le pagine in ingresso",
                 controls=(
                     Control(
                         type=ControlType.SELECT,
                         target="source.box",
-                        label="Impose",
+                        label="Riquadro",
                         default=SourceBox.TRIM,
                         description=(
-                            "Which box of the source page is fitted to each cell. Trim is "
-                            "the finished page a press-ready PDF describes; it falls back "
-                            "to the full page when the file carries no boxes."
+                            "Quale riquadro della pagina di origine viene adattato a ogni cella. Il Trim "
+                            "Box è la pagina finita descritta da un PDF per la stampa; se il file non "
+                            "contiene riquadri, viene usata l'intera pagina."
                         ),
-                        options=_enum_options(SourceBox),
+                        options=_SOURCE_BOX_OPTIONS,
                     ),
                     Control(
                         type=ControlType.NUMBER,
                         target="source.bleed_mm",
-                        label="Bleed",
+                        label="Abbondanza",
                         default=0.0,
                         description=(
-                            "Extra artwork pulled beyond the box and allowed to spill "
-                            "outside the cell, so a slightly off cut still lands on ink."
+                            "Grafica aggiuntiva estesa oltre il riquadro consentita a fuoriuscire "
+                            "dalla cella, per garantire la presenza di inchiostro anche con un taglio non "
+                            "perfettamente a registro."
                         ),
                         maximum=50.0, decimals=1, step=0.5, suffix=" mm",
                     ),
                 ),
             ),
             Section(
-                title="Preprocessors",
-                entity="transforms applied before imposition",
+                title="Trasformazioni",
+                entity="modifiche applicate prima dell'imposizione",
                 controls=(
                     Control(
                         type=ControlType.COLLECTION,
                         target="preprocessors",
-                        label="Steps",
+                        label="Passaggi",
                     ),
                 ),
             ),
@@ -141,20 +169,20 @@ SCHEMA: Tuple[Tab, ...] = (
         name="Layout",
         sections=(
             Section(
-                title="Arrangement",
-                entity="how pages are placed on the sheet",
+                title="Disposizione",
+                entity="come vengono disposte le pagine sul foglio",
                 controls=(
                     Control(
                         type=ControlType.SEGMENTED,
                         target="layout.layout_type",
-                        label="Type",
+                        label="Tipo",
                         default=LayoutType.NUP,
-                        options=_enum_options(LayoutType),
+                        options=_LAYOUT_OPTIONS,
                     ),
                     Control(
                         type=ControlType.SELECT,
                         target="layout.nup",
-                        label="Pages per sheet",
+                        label="Pagine per foglio",
                         default=2,
                         options=((1, "1-Up"), (2, "2-Up"), (4, "4-Up"), (6, "6-Up"),
                                  (8, "8-Up"), (9, "9-Up"), (16, "16-Up")),
@@ -163,49 +191,49 @@ SCHEMA: Tuple[Tab, ...] = (
                     Control(
                         type=ControlType.SWITCH,
                         target="layout.auto_rotate",
-                        label="Turn pages to fit",
+                        label="Ruota per adattare",
                         default=False,
                         description=(
-                            "Rotate a page a quarter turn when that fills its cell better — "
-                            "landscape artwork on a portrait sheet."
+                            "Ruota la pagina di un quarto di giro quando questo permette di riempire meglio "
+                            "la cella — ad esempio grafica orizzontale su foglio verticale."
                         ),
                         visible_when=_IS_NUP,
                     ),
                     Control(
                         type=ControlType.SEGMENTED,
                         target="layout.scaling",
-                        label="Page size",
+                        label="Dimensione",
                         default=PageScaling.ACTUAL_SIZE,
                         description=(
-                            "Actual size prints each page at 100%, shrinking it only when "
-                            "it doesn't fit the cell. Fit to cell scales to fill the cell, "
-                            "which enlarges pages smaller than it."
+                            "Dim. reale stampa ogni pagina al 100%, riducendola solo se non entra "
+                            "nella cella. Adatta a cella scala la pagina per riempire la cella, "
+                            "ingrandendo quelle più piccole."
                         ),
-                        options=_enum_options(PageScaling),
+                        options=_SCALING_OPTIONS,
                     ),
                 ),
             ),
             Section(
-                title="Booklet",
-                entity="how folded sheets become a book",
+                title="Opuscolo",
+                entity="come i fogli piegati formano un libro",
                 visible_when=_IS_BOOKLET,
                 controls=(
                     Control(
                         type=ControlType.SEGMENTED,
                         target="layout.booklet_mode",
-                        label="Binding",
+                        label="Rilegatura",
                         default=BookletMode.SADDLE_STITCH,
                         description=(
-                            "Saddle stitch nests every sheet into one signature and staples "
-                            "the fold. Perfect binding folds fixed-size signatures separately "
-                            "and glues them, which changes the page order."
+                            "Punto metallico inserisce ogni foglio dentro l'altro in una sola segnatura "
+                            "e pinza lungo la piega. Brossura piega separatamente segnature di "
+                            "dimensione fissa e le incolla, cambiando l'ordine delle pagine."
                         ),
-                        options=_enum_options(BookletMode),
+                        options=_BOOKLET_MODE_OPTIONS,
                     ),
                     Control(
                         type=ControlType.NUMBER,
                         target="layout.signature_sheets",
-                        label="Sheets per signature",
+                        label="Fogli per segnatura",
                         default=4,
                         minimum=1, maximum=64, step=1,
                         visible_when=When(target="layout.booklet_mode",
@@ -214,43 +242,43 @@ SCHEMA: Tuple[Tab, ...] = (
                     Control(
                         type=ControlType.SWITCH,
                         target="layout.right_to_left",
-                        label="Right-to-left binding",
+                        label="Rilegatura da destra a sinistra",
                         default=False,
                     ),
                     Control(
                         type=ControlType.SWITCH,
                         target="layout.fillers_in_middle",
-                        label="Blanks in the middle",
+                        label="Pagine bianche al centro",
                         default=False,
                         description=(
-                            "A booklet pads out to a multiple of four. Put the blanks at the "
-                            "centre spread instead of the end, to keep a printed back cover. "
-                            "An odd blank goes just inside the back cover, so every page "
-                            "stays on its own side of the spread."
+                            "Un opuscolo si estende sempre a un multiplo di quattro. Posiziona le pagine "
+                            "bianche al centro invece che alla fine, per mantenere stampata la quarta "
+                            "di copertina. Se è una sola pagina bianca, va appena dentro la quarta "
+                            "di copertina, mantenendo ogni pagina sul proprio lato dell'apertura."
                         ),
                     ),
                 ),
             ),
             Section(
-                title="Creep",
-                entity="fore-edge compensation",
+                title="Scorrimento",
+                entity="compensazione del margine esterno",
                 visible_when=_IS_BOOKLET,
                 controls=(
                     Control(
                         type=ControlType.SWITCH,
                         target="layout.creep_enabled",
-                        label="Compensate",
+                        label="Compensa scorrimento",
                         default=False,
                         description=(
-                            "Nested sheets push out at the fore-edge, and trimming the folded "
-                            "stack flush takes more off the inner leaves. This walks each "
-                            "sheet's pages towards the spine to even the margins out."
+                            "I fogli inseriti l'uno nell'altro fuoriescono sul bordo esterno e il rifilo "
+                            "del blocco piegato toglie più margine ai fogli interni. Questa opzione sposta "
+                            "le pagine verso la piega per pareggiare i margini."
                         ),
                     ),
                     Control(
                         type=ControlType.NUMBER,
                         target="layout.creep_outer_mm",
-                        label="Outer sheet",
+                        label="Foglio esterno",
                         default=0.0,
                         minimum=-50.0, maximum=50.0, decimals=2, step=0.1, suffix=" mm",
                         visible_when=When(target="layout.creep_enabled", equals=True),
@@ -258,29 +286,29 @@ SCHEMA: Tuple[Tab, ...] = (
                     Control(
                         type=ControlType.NUMBER,
                         target="layout.creep_inner_mm",
-                        label="Inner sheet",
+                        label="Foglio interno",
                         default=0.0,
-                        description="The innermost sheet creeps most; the rest interpolate.",
+                        description="Il foglio più interno scorre di più; gli altri fogli interpolano lo spostamento in proporzione.",
                         minimum=-50.0, maximum=50.0, decimals=2, step=0.1, suffix=" mm",
                         visible_when=When(target="layout.creep_enabled", equals=True),
                     ),
                 ),
             ),
             Section(
-                title="Gutters",
-                entity="the gaps between cells",
+                title="Spaziature",
+                entity="spaziature e canali tra le celle",
                 controls=(
                     Control(
                         type=ControlType.NUMBER,
                         target="layout.gutter_h_mm",
-                        label="Horizontal",
+                        label="Orizzontale",
                         default=0.0,
                         maximum=100.0, decimals=1, step=0.5, suffix=" mm",
                     ),
                     Control(
                         type=ControlType.NUMBER,
                         target="layout.gutter_v_mm",
-                        label="Vertical",
+                        label="Verticale",
                         default=0.0,
                         maximum=100.0, decimals=1, step=0.5, suffix=" mm",
                         visible_when=_IS_NUP,
@@ -288,39 +316,39 @@ SCHEMA: Tuple[Tab, ...] = (
                 ),
             ),
             Section(
-                title="Page Range",
-                entity="which source pages are imposed",
+                title="Intervallo pagine",
+                entity="quali pagine di origine vengono impaginate",
                 controls=(
                     Control(
                         type=ControlType.TEXT,
                         target="layout.page_range",
-                        label="Pages",
+                        label="Pagine",
                         default="",
-                        placeholder="e.g. 1-4,7,10-12  (all if empty)",
-                        description="Order matters: 5,2 imposes page 5 first.",
+                        placeholder="es. 1-4,7,10-12  (tutte se vuoto)",
+                        description="L'ordine conta: 5,2 impagina prima la pagina 5.",
                     ),
                 ),
             ),
         ),
     ),
     Tab(
-        name="Sheet",
+        name="Foglio",
         sections=(
             Section(
-                title="Press Sheet",
-                entity="the paper being printed",
+                title="Foglio macchina",
+                entity="la carta su cui si stampa",
                 controls=(
                     Control(
                         type=ControlType.SELECT,
                         target="sheet.preset",
-                        label="Size",
+                        label="Formato",
                         default="A3",
                         options=_PRESET_OPTIONS,
                     ),
                     Control(
                         type=ControlType.NUMBER,
                         target="sheet.custom_width_mm",
-                        label="Width",
+                        label="Larghezza",
                         default=297.0,
                         minimum=1.0, maximum=5000.0, decimals=1, suffix=" mm",
                         visible_when=When(target="sheet.preset", equals="Custom"),
@@ -328,7 +356,7 @@ SCHEMA: Tuple[Tab, ...] = (
                     Control(
                         type=ControlType.NUMBER,
                         target="sheet.custom_height_mm",
-                        label="Height",
+                        label="Altezza",
                         default=420.0,
                         minimum=1.0, maximum=5000.0, decimals=1, suffix=" mm",
                         visible_when=When(target="sheet.preset", equals="Custom"),
@@ -336,39 +364,39 @@ SCHEMA: Tuple[Tab, ...] = (
                     Control(
                         type=ControlType.SEGMENTED,
                         target="sheet.orientation",
-                        label="Orientation",
+                        label="Orientamento",
                         default=Orientation.LANDSCAPE,
-                        options=_enum_options(Orientation),
+                        options=_ORIENTATION_OPTIONS,
                     ),
                 ),
             ),
             Section(
-                title="Margins",
-                entity="the unprintable edge of the sheet",
+                title="Margini",
+                entity="il bordo non stampabile del foglio",
                 controls=(
                     Control(type=ControlType.NUMBER, target="sheet.margin_top_mm",
-                            label="Top", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
+                            label="Superiore", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
                     Control(type=ControlType.NUMBER, target="sheet.margin_bottom_mm",
-                            label="Bottom", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
+                            label="Inferiore", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
                     Control(type=ControlType.NUMBER, target="sheet.margin_left_mm",
-                            label="Left", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
+                            label="Sinistro", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
                     Control(type=ControlType.NUMBER, target="sheet.margin_right_mm",
-                            label="Right", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
+                            label="Destro", default=5.0, maximum=500.0, decimals=1, suffix=" mm"),
                 ),
             ),
         ),
     ),
     Tab(
-        name="Marks",
+        name="Segni",
         sections=(
             Section(
-                title="Printer Marks",
-                entity="what gets drawn around the pages",
+                title="Segni di stampa",
+                entity="elementi stampati attorno alle pagine",
                 controls=(
                     Control(
                         type=ControlType.COLLECTION,
                         target="marks",
-                        label="Marks",
+                        label="Segni",
                     ),
                 ),
             ),

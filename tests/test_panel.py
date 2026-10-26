@@ -197,7 +197,7 @@ class TestRenderedPanel:
 
         store.set("layout.layout_type", LayoutType.NUP)
         page.refresh(store.values())
-        booklet = next(s for s in page.sections if s.section.title == "Booklet")
+        booklet = next(s for s in page.sections if s.section.title in ("Opuscolo", "Booklet"))
         assert not booklet.isVisible()
 
         store.set("layout.layout_type", LayoutType.BOOKLET)
@@ -207,22 +207,22 @@ class TestRenderedPanel:
     def test_hidden_controls_are_hidden_not_disabled(self, app, store):
         # The rule that answers 0.2.0's defect: a control that cannot act is gone,
         # not greyed out. A greyed control still says "this feature exists".
-        layout_tab = next(t for t in SCHEMA if t.name == "Layout")
+        layout_tab = next(t for t in SCHEMA if t.name in ("Layout", "Disposizione"))
         page = SchemaTab(layout_tab, store)
         store.set("layout.layout_type", LayoutType.BOOKLET)
         store.set("layout.booklet_mode", BookletMode.SADDLE_STITCH)
         page.refresh(store.values())
 
-        booklet = next(s for s in page.sections if s.section.title == "Booklet")
+        booklet = next(s for s in page.sections if s.section.title in ("Opuscolo", "Booklet"))
         for control, widget in booklet._rows:
             if control.target == "layout.signature_sheets":
                 assert not widget.isVisible()
                 assert widget.isEnabled(), "hidden controls must not also be disabled"
 
     def test_editing_a_widget_writes_through_to_the_store(self, app, store):
-        sheet_tab = next(t for t in SCHEMA if t.name == "Sheet")
+        sheet_tab = next(t for t in SCHEMA if t.name in ("Foglio", "Sheet"))
         page = SchemaTab(sheet_tab, store)
-        margins = next(s for s in page.sections if s.section.title == "Margins")
+        margins = next(s for s in page.sections if s.section.title in ("Margini", "Margins"))
         control, row = margins._rows[0]
         row.widget.setValue(11.0)
         assert store.get(control.target) == 11.0

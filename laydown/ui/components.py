@@ -139,9 +139,9 @@ class SectionHeader(QWidget):
         row.addWidget(self._title)
         row.addStretch(1)
 
-        self._reset = QPushButton("Reset")
+        self._reset = QPushButton("Ripristina")
         self._reset.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._reset.setToolTip("Restore this section to its defaults")
+        self._reset.setToolTip("Ripristina questa sezione ai valori predefiniti")
         self._reset.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none; color: {t.FG_FAINT};"
             f"               font-size: {t.TEXT_2XS}px; padding: 2px 6px; min-height: 0;"

@@ -158,14 +158,14 @@ class TestVisibility:
         from laydown.engine.data_model import LayoutType
         values = defaults()
         values["layout.layout_type"] = LayoutType.NUP
-        booklet = next(s for s in all_sections() if s.title == "Booklet")
+        booklet = next(s for s in all_sections() if s.title in ("Opuscolo", "Booklet"))
         assert not is_visible(booklet, values)
 
     def test_booklet_controls_appear_for_a_booklet(self):
         from laydown.engine.data_model import LayoutType
         values = defaults()
         values["layout.layout_type"] = LayoutType.BOOKLET
-        booklet = next(s for s in all_sections() if s.title == "Booklet")
+        booklet = next(s for s in all_sections() if s.title in ("Opuscolo", "Booklet"))
         assert is_visible(booklet, values)
 
     def test_signature_size_only_shows_for_perfect_binding(self):

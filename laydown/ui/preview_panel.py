@@ -295,7 +295,7 @@ class SheetCanvas(QScrollArea):
 
     def _show_placeholder(self):
         self._clear_grid()
-        lbl = QLabel("Open a PDF to get started\n\nDouble-click here, press Ctrl+O,\nor drag and drop a PDF")
+        lbl = QLabel("Apri un PDF per iniziare\n\nFai doppio clic qui, premi Ctrl+O\no trascina e rilascia un file PDF")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_LG}px; padding: 60px;")
         self._grid.addWidget(lbl, 0, 0)
@@ -480,7 +480,7 @@ class SheetCanvas(QScrollArea):
         if generation != self._generation:
             return
         self._clear_grid()
-        lbl = QLabel(f"Render error:\n{msg}")
+        lbl = QLabel(f"Errore di rendering:\n{msg}")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(f"color: {t.DESTRUCTIVE}; font-size: {t.TEXT_SM}px; padding: 40px;")
         self._grid.addWidget(lbl, 0, 0)

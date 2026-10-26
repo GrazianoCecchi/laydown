@@ -44,11 +44,13 @@ class TestPreflightErrors:
         assert len(win._findings) == 1
         finding = win._findings[0]
         assert finding.severity is Severity.ERROR
-        assert "preflight could not run" in finding.message.lower()
+        assert ("impossibile eseguire il preflight" in finding.message.lower()
+                or "preflight could not run" in finding.message.lower())
         assert "preflight calculation failure" in finding.message
         assert not win._preflight_bar.isHidden()
         assert win._preflight_bar.isVisible()
-        assert "preflight could not run" in win._preflight_text.text().lower()
+        assert ("impossibile eseguire il preflight" in win._preflight_text.text().lower()
+                or "preflight could not run" in win._preflight_text.text().lower())
 
 
 class TestEncryptedPdf:

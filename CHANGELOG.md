@@ -4,6 +4,17 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
+## [Unreleased]
+
+- **Traduzione completa in italiano dell'interfaccia utente:**
+  - Tutti i menu della barra dei menu (File, Modifica, Visualizza, Aiuto), le relative azioni e le scorciatoie sono in italiano.
+  - Tradotti i titoli delle schede, le sezioni, le etichette dei controlli, le descrizioni, i testi segnaposto e le opzioni dello schema (Origine, Layout, Foglio, Segni).
+  - Tradotte le schede per la gestione dei segni e crocini di stampa (MarksTab) e delle trasformazioni pagina (PreprocessorsTab).
+  - Tradotti i pulsanti della barra degli strumenti, la barra di preflight con le relative notifiche, i messaggi della barra di stato e le finestre di dialogo (Apri, Salva, Esporta, Predefiniti, Dettagli controllo preliminare, Informazioni e Guida/Tutorial).
+  - Tradotta l'area segnaposto del visualizzatore di anteprima e tutti i messaggi di avanzamento ed esportazione.
+
+---
+
 ## [0.4.7] — 2026-10-15
 
 Sharper preview, safer presets and print-shop sheet sizes.

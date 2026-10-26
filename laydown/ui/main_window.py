@@ -152,17 +152,17 @@ class _ExportWorker(QThread):
 
     def run(self):
         if not self._project or not self._output:
-            self.failed.emit("No project or output path specified")
+            self.failed.emit("Nessun progetto o percorso di destinazione specificato")
             return
         if self._project.source_pdf_path and _is_same_path(self._project.source_pdf_path, self._output):
-            self.failed.emit("Cannot overwrite source PDF")
+            self.failed.emit("Impossibile sovrascrivere il PDF di origine")
             return
 
         temp_path: Optional[str] = None
         try:
             target_dir = os.path.dirname(os.path.abspath(self._output))
             if not os.path.isdir(target_dir):
-                raise FileNotFoundError(f"Directory does not exist: {target_dir}")
+                raise FileNotFoundError(f"La cartella non esiste: {target_dir}")
 
             fd, temp_path = tempfile.mkstemp(
                 prefix=f".{os.path.basename(self._output)}.",
@@ -184,7 +184,7 @@ class _ExportWorker(QThread):
             temp_path = None
             self.done.emit(sheets, self._output)
         except _Cancelled:
-            self.failed.emit("Export cancelled")
+            self.failed.emit("Esportazione annullata")
         except Exception as exc:
             self.failed.emit(str(exc))
         finally:
@@ -199,12 +199,26 @@ class _Cancelled(Exception):
     """Raised inside the worker when the user cancels — the only way to stop mid-sheet."""
 
 
+_SEVERITY_LABELS = {
+    Severity.ERROR: "Errore",
+    Severity.WARNING: "Avviso",
+    Severity.NOTE: "Nota",
+}
+
+_UNIT_NAMES = {
+    Unit.MM: "Millimetri",
+    Unit.CM: "Centimetri",
+    Unit.INCH: "Pollici",
+    Unit.POINT: "Punti",
+}
+
+
 # ── dialogs ──────────────────────────────────────────
 
 class _TutorialsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Laydown — Tutorials & Reference")
+        self.setWindowTitle("Laydown — Guida e documentazione")
         self.resize(760, 640)
         column = QVBoxLayout(self)
         browser = QTextBrowser()
@@ -256,7 +270,7 @@ class MainWindow(QMainWindow):
     # ── title ────────────────────────────────────
 
     def _update_title(self, filename: str = ""):
-        suffix = filename or "PDF Imposition"
+        suffix = filename or "Imposizione PDF"
         self.setWindowTitle(f"{_APP_TITLE} — {suffix}")
 
     # ── menus ────────────────────────────────────
@@ -268,84 +282,85 @@ class MainWindow(QMainWindow):
             return lucide(name, 16)
 
         file_menu = bar.addMenu("&File")
-        self._act_open = QAction(mi("open"), "&Open PDF…", self,
+        self._act_open = QAction(mi("open"), "&Apri PDF…", self,
                                  shortcut=QKeySequence("Ctrl+O"), triggered=self._on_open)
         file_menu.addAction(self._act_open)
-        self._recent_menu = file_menu.addMenu("Open &Recent")
+        self._recent_menu = file_menu.addMenu("Apri &recenti")
         self._recent_menu.setIcon(mi("recent"))
         self._rebuild_recent_menu()
 
-        self._act_close = QAction(mi("close"), "&Close PDF", self,
+        self._act_close = QAction(mi("close"), "&Chiudi PDF", self,
                                   shortcut=QKeySequence("Ctrl+F4"),
                                   enabled=False, triggered=self._on_close_pdf)
         file_menu.addAction(self._act_close)
         file_menu.addSeparator()
 
-        self._act_generate = QAction(mi("generate"), "&Generate PDF", self,
+        self._act_generate = QAction(mi("generate"), "&Genera PDF", self,
                                      shortcut=QKeySequence("Ctrl+G"),
                                      enabled=False, triggered=self._on_export)
         file_menu.addAction(self._act_generate)
         file_menu.addSeparator()
-        file_menu.addAction(QAction(mi("save_preset"), "Save &Preset…", self,
+        file_menu.addAction(QAction(mi("save_preset"), "Salva &predefinito…", self,
                                     triggered=self._on_save_preset))
-        file_menu.addAction(QAction(mi("load_preset"), "&Load Preset…", self,
+        file_menu.addAction(QAction(mi("load_preset"), "&Carica predefinito…", self,
                                     triggered=self._on_load_preset))
         file_menu.addSeparator()
-        file_menu.addAction(QAction(mi("quit"), "&Quit", self,
+        file_menu.addAction(QAction(mi("quit"), "&Esci", self,
                                     shortcut=QKeySequence("Alt+F4"), triggered=self.close))
 
-        edit_menu = bar.addMenu("&Edit")
-        self._act_undo = QAction(mi("undo"), "&Undo", self, shortcut="Ctrl+Z",
+        edit_menu = bar.addMenu("&Modifica")
+        self._act_undo = QAction(mi("undo"), "&Annulla", self, shortcut="Ctrl+Z",
                                  enabled=False, triggered=self._undo)
-        self._act_redo = QAction(mi("redo"), "&Redo", self, shortcut="Ctrl+Y",
+        self._act_redo = QAction(mi("redo"), "&Ripeti", self, shortcut="Ctrl+Y",
                                  enabled=False, triggered=self._redo)
         edit_menu.addAction(self._act_undo)
         edit_menu.addAction(self._act_redo)
         edit_menu.addSeparator()
-        edit_menu.addAction(QAction(mi("reset"), "Reset &All Settings", self,
+        edit_menu.addAction(QAction(mi("reset"), "Ripristina &tutte le impostazioni", self,
                                     triggered=self._on_reset_all))
 
-        view_menu = bar.addMenu("&View")
-        view_menu.addAction(QAction(mi("zoom_in"), "Zoom &In", self, shortcut="Ctrl++",
+        view_menu = bar.addMenu("&Visualizza")
+        view_menu.addAction(QAction(mi("zoom_in"), "In&grandisci", self, shortcut="Ctrl++",
                                     triggered=lambda: self._canvas.zoom_in()))
-        view_menu.addAction(QAction(mi("zoom_out"), "Zoom &Out", self, shortcut="Ctrl+-",
+        view_menu.addAction(QAction(mi("zoom_out"), "Riduci &zoom", self, shortcut="Ctrl+-",
                                     triggered=lambda: self._canvas.zoom_out()))
-        view_menu.addAction(QAction(mi("fit_width"), "&Reset Zoom", self, shortcut="Ctrl+0",
+        view_menu.addAction(QAction(mi("fit_width"), "&Reimposta zoom", self, shortcut="Ctrl+0",
                                     triggered=lambda: self._canvas.fit_width()))
-        units_menu = view_menu.addMenu("&Units")
+        units_menu = view_menu.addMenu("&Unità di misura")
         units_menu.setIcon(mi("tab_sheet"))
         unit_group = QActionGroup(self)
         unit_group.setExclusive(True)
         for unit in Unit:
-            action = QAction(f"{unit.name.title()} ({unit.value})", self, checkable=True,
+            uname = _UNIT_NAMES.get(unit, unit.name.title())
+            action = QAction(f"{uname} ({unit.value})", self, checkable=True,
                              checked=(unit is Unit.MM))
             action.triggered.connect(lambda _, u=unit: self._on_unit_changed(u))
             unit_group.addAction(action)
             units_menu.addAction(action)
         view_menu.addSeparator()
 
-        self._act_nums = QAction("Show Page &Numbers", self, checkable=True, checked=True,
+        self._act_nums = QAction("Mostra &numeri di pagina", self, checkable=True, checked=True,
                                  shortcut="Alt+1")
-        self._act_frames = QAction("Show Cut &Lines", self, checkable=True, checked=True,
+        self._act_frames = QAction("Mostra linee di &taglio", self, checkable=True, checked=True,
                                    shortcut="Alt+2")
-        self._act_tops = QAction("Show Page &Tops", self, checkable=True, checked=False,
+        self._act_tops = QAction("Mostra parte &superiore pagine", self, checkable=True, checked=False,
                                  shortcut="Alt+3")
-        self._act_previews = QAction("Show Page Pre&views", self, checkable=True, checked=True,
+        self._act_previews = QAction("Mostra ante&prime pagine", self, checkable=True, checked=True,
                                      shortcut="Alt+4")
         for action in (self._act_nums, self._act_frames, self._act_tops, self._act_previews):
             action.toggled.connect(self._on_view_toggle)
             view_menu.addAction(action)
 
-        help_menu = bar.addMenu("&Help")
-        help_menu.addAction(QAction(mi("tutorials"), "&Tutorials", self, shortcut="F1",
+        help_menu = bar.addMenu("&Aiuto")
+        help_menu.addAction(QAction(mi("tutorials"), "&Guida e tutorial", self, shortcut="F1",
                                     triggered=self._on_tutorials))
-        help_menu.addAction(QAction(mi("preflight"), "&Preflight…", self, shortcut="F7",
+        help_menu.addAction(QAction(mi("preflight"), "&Controllo preliminare (Preflight)…", self, shortcut="F7",
                                     triggered=self._show_preflight_details))
         help_menu.addSeparator()
-        help_menu.addAction(QAction(mi("sysdir"), "Open &System Folder", self,
+        help_menu.addAction(QAction(mi("sysdir"), "Apri cartella di &sistema", self,
                                     triggered=self._on_sysdir))
         help_menu.addSeparator()
-        help_menu.addAction(QAction(mi("about"), "&About…", self, triggered=self._on_about))
+        help_menu.addAction(QAction(mi("about"), "&Informazioni su Laydown…", self, triggered=self._on_about))
 
     # ── layout ───────────────────────────────────
 
@@ -371,7 +386,7 @@ class MainWindow(QMainWindow):
 
         self._status = QStatusBar()
         self.setStatusBar(self._status)
-        self._status.showMessage("Ready — open a PDF to get started")
+        self._status.showMessage("Pronto — apri un PDF per iniziare")
 
     def _create_toolbar(self):
         bar = QFrame()
@@ -385,9 +400,9 @@ class MainWindow(QMainWindow):
 
         columns = QButtonGroup(self)
         columns.setExclusive(True)
-        for count, glyph, tip in ((1, "columns_1", "Single column"),
-                                  (2, "columns_2", "Two columns"),
-                                  (4, "columns_4", "Four columns")):
+        for count, glyph, tip in ((1, "columns_1", "Colonna singola"),
+                                  (2, "columns_2", "Due colonne"),
+                                  (4, "columns_4", "Quattro colonne")):
             button = _tool_btn(lucide(glyph), tip, checkable=True, checked=(count == 2))
             columns.addButton(button, count)
             row.addWidget(button)
@@ -395,17 +410,17 @@ class MainWindow(QMainWindow):
 
         row.addStretch(1)
         for glyph, tip, slot in (
-            ("zoom_in", "Zoom in", lambda: self._canvas.zoom_in()),
-            ("zoom_out", "Zoom out", lambda: self._canvas.zoom_out()),
+            ("zoom_in", "Ingrandisci", lambda: self._canvas.zoom_in()),
+            ("zoom_out", "Riduci zoom", lambda: self._canvas.zoom_out()),
         ):
             button = _tool_btn(lucide(glyph), tip)
             button.clicked.connect(slot)
             row.addWidget(button)
         row.addWidget(_vsep())
         for glyph, tip, slot in (
-            ("fit_width", "Fit to width", lambda: self._canvas.fit_width()),
-            ("fit_page", "Fit whole sheet", lambda: self._canvas.fit_page()),
-            ("actual_size", "Actual size (1:1)", lambda: self._canvas.actual_size()),
+            ("fit_width", "Adatta alla larghezza", lambda: self._canvas.fit_width()),
+            ("fit_page", "Adatta foglio intero", lambda: self._canvas.fit_page()),
+            ("actual_size", "Dimensione reale (1:1)", lambda: self._canvas.actual_size()),
         ):
             button = _tool_btn(lucide(glyph), tip)
             button.clicked.connect(slot)
@@ -432,7 +447,7 @@ class MainWindow(QMainWindow):
         self._preflight_text.setWordWrap(True)
         row.addWidget(self._preflight_text, 1)
 
-        self._preflight_more = QPushButton("Details")
+        self._preflight_more = QPushButton("Dettagli")
         self._preflight_more.setCursor(Qt.CursorShape.PointingHandCursor)
         self._preflight_more.clicked.connect(self._show_preflight_details)
         row.addWidget(self._preflight_more, 0)
@@ -447,7 +462,7 @@ class MainWindow(QMainWindow):
             self._findings = [
                 Finding(
                     Severity.ERROR,
-                    f"Preflight could not run: {exc}",
+                    f"Impossibile eseguire il preflight: {exc}",
                     detail=traceback.format_exc(),
                 )
             ]
@@ -462,7 +477,7 @@ class MainWindow(QMainWindow):
             self._preflight_bar.setVisible(False)
             if notes and self._source_path:
                 self._status.showMessage(
-                    f"{notes} preflight note{'s' if notes > 1 else ''} — Help \u2192 Preflight")
+                    f"{notes} note di controllo preliminare — Aiuto \u2192 Controllo preliminare (Preflight)…")
             return
 
         worst = loud[0]
@@ -472,9 +487,10 @@ class MainWindow(QMainWindow):
         self._preflight_bar.setStyleSheet(
             f"#preflight {{ background: {t.RAISED}; border-bottom: 1px solid {colour}; }}")
         extra = len(self._findings) - 1
-        suffix = f"   (+{extra} more)" if extra > 0 else ""
+        suffix = f"   (+{extra} altri)" if extra > 0 else ""
+        sev_label = _SEVERITY_LABELS.get(worst.severity, worst.severity.value)
         self._preflight_text.setText(
-            f"<span style='color:{colour}'><b>{worst.severity.value}</b></span> "
+            f"<span style='color:{colour}'><b>{sev_label}</b></span> "
             f"<span style='color:{t.FG}'>{worst.message}</span>"
             f"<span style='color:{t.FG_FAINT}'>{suffix}</span>"
         )
@@ -483,15 +499,15 @@ class MainWindow(QMainWindow):
 
     def _show_preflight_details(self):
         if not getattr(self, "_findings", None):
-            QMessageBox.information(self, "Preflight", "Nothing to report — this job looks fine.")
+            QMessageBox.information(self, "Controllo preliminare", "Nessun problema rilevato — il lavoro è corretto.")
             return
         body = "".join(
-            f"<p style='margin:0 0 10px 0'><b>{f.severity.value}:</b> {f.message}"
+            f"<p style='margin:0 0 10px 0'><b>{_SEVERITY_LABELS.get(f.severity, f.severity.value)}:</b> {f.message}"
             + (f"<br><span style='color:{t.FG_MUTED}'>{f.detail}</span>" if f.detail else "")
             + "</p>"
             for f in self._findings
         )
-        QMessageBox.information(self, "Preflight", f"<div>{body}</div>")
+        QMessageBox.information(self, "Controllo preliminare", f"<div>{body}</div>")
 
     def _collection_for(self, control):
         """Supply the bespoke editors for the two genuinely growable settings."""
@@ -594,7 +610,7 @@ class MainWindow(QMainWindow):
         row = QVBoxLayout(footer)
         row.setContentsMargins(t.SPACE_3, t.SPACE_3, t.SPACE_3, t.SPACE_3)
 
-        self._generate = QPushButton("  Generate PDF")
+        self._generate = QPushButton("  Genera PDF")
         self._generate.setIcon(lucide("generate", 18, t.ACCENT_FG))
         self._generate.setProperty("accent", True)
         self._generate.setEnabled(False)
@@ -636,7 +652,7 @@ class MainWindow(QMainWindow):
     def _on_unit_changed(self, unit):
         self._store.set_unit(unit)
         self._settings.setValue("display_unit", unit.name)
-        self._status.showMessage(f"Lengths shown in {unit.value}")
+        self._status.showMessage(f"Lunghezze visualizzate in {unit.value}")
 
     def _on_view_toggle(self, _=None):
         self._canvas.set_overlays(
@@ -650,13 +666,13 @@ class MainWindow(QMainWindow):
 
     def _on_open(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Open PDF", "", "PDF Files (*.pdf);;All Files (*)")
+            self, "Apri PDF", "", "File PDF (*.pdf);;Tutti i file (*)")
         if path:
             self.load_pdf(path)
 
     def load_pdf(self, path: str):
         if not os.path.isfile(path):
-            self._status.showMessage(f"File not found: {path}")
+            self._status.showMessage(f"File non trovato: {path}")
             return
         try:
             import fitz
@@ -669,13 +685,13 @@ class MainWindow(QMainWindow):
                 for widget in (self._act_close, self._act_generate, self._generate):
                     widget.setEnabled(False)
                 self._canvas.clear_all()
-                msg = "This PDF is password-protected — remove the password and open it again"
+                msg = "Questo PDF è protetto da password — rimuovi la password e aprilo di nuovo"
                 self._findings = [Finding(Severity.ERROR, msg)]
                 self._status.showMessage(msg)
                 self._preflight_bar.setStyleSheet(
                     f"#preflight {{ background: {t.RAISED}; border-bottom: 1px solid {t.DESTRUCTIVE}; }}")
                 self._preflight_text.setText(
-                    f"<span style='color:{t.DESTRUCTIVE}'><b>Error</b></span> "
+                    f"<span style='color:{t.DESTRUCTIVE}'><b>Errore</b></span> "
                     f"<span style='color:{t.FG}'>{msg}</span>"
                 )
                 self._preflight_more.setVisible(False)
@@ -683,7 +699,7 @@ class MainWindow(QMainWindow):
                 return
             count = len(doc)
         except Exception as exc:
-            self._status.showMessage(f"Could not open: {exc}")
+            self._status.showMessage(f"Impossibile aprire: {exc}")
             return
 
         self._close_source_doc()
@@ -691,7 +707,7 @@ class MainWindow(QMainWindow):
         self._source_path = path
         name = os.path.basename(path)
         self._update_title(name)
-        self._status.showMessage(f"{name} — {count} page{'s' if count != 1 else ''}")
+        self._status.showMessage(f"{name} — {count} pagin{'a' if count == 1 else 'e'}")
         for widget in (self._act_close, self._act_generate, self._generate):
             widget.setEnabled(True)
         self._add_recent(path)
@@ -713,7 +729,7 @@ class MainWindow(QMainWindow):
             widget.setEnabled(False)
         self._canvas.clear_all()
         self._run_preflight()
-        self._status.showMessage("PDF closed")
+        self._status.showMessage("PDF chiuso")
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
@@ -748,14 +764,14 @@ class MainWindow(QMainWindow):
     def _rebuild_recent_menu(self):
         self._recent_menu.clear()
         if not self._recent:
-            self._recent_menu.addAction("(no recent files)").setEnabled(False)
+            self._recent_menu.addAction("(nessun file recente)").setEnabled(False)
             return
         for path in self._recent:
             action = self._recent_menu.addAction(os.path.basename(path))
             action.setToolTip(path)
             action.triggered.connect(lambda _, p=path: self.load_pdf(p))
         self._recent_menu.addSeparator()
-        self._recent_menu.addAction("Clear Recent", self._clear_recent)
+        self._recent_menu.addAction("Cancella recenti", self._clear_recent)
 
     def _clear_recent(self):
         self._recent.clear()
@@ -766,19 +782,19 @@ class MainWindow(QMainWindow):
 
     def _on_save_preset(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save Preset", "preset.laydown.json", "Laydown Preset (*.json)")
+            self, "Salva predefinito", "preset.laydown.json", "Predefinito Laydown (*.json)")
         if not path:
             return
         from laydown.ui.presets import save_preset
         try:
             save_preset(path, self._store.values())
-            self._status.showMessage(f"Preset saved → {os.path.basename(path)}")
+            self._status.showMessage(f"Predefinito salvato → {os.path.basename(path)}")
         except Exception as exc:
-            QMessageBox.critical(self, "Could not save preset", str(exc))
+            QMessageBox.critical(self, "Impossibile salvare il predefinito", str(exc))
 
     def _on_load_preset(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Load Preset", "", "Laydown Preset (*.json);;All Files (*)")
+            self, "Carica predefinito", "", "Predefinito Laydown (*.json);;Tutti i file (*)")
         if not path:
             return
         from laydown.ui.presets import load_preset
@@ -786,9 +802,9 @@ class MainWindow(QMainWindow):
             self._store.load(load_preset(path))
             self._rebuild_collection_editors()
             self._resync_widgets()
-            self._status.showMessage(f"Preset loaded — {os.path.basename(path)}")
+            self._status.showMessage(f"Predefinito caricato — {os.path.basename(path)}")
         except Exception as exc:
-            QMessageBox.critical(self, "Could not load preset", str(exc))
+            QMessageBox.critical(self, "Impossibile caricare il predefinito", str(exc))
 
     def _on_reset_all(self):
         from laydown.ui.schema import defaults
@@ -830,7 +846,7 @@ class MainWindow(QMainWindow):
         suggested = f"{base}_{suffix}_{project.sheet.preset}.pdf"
 
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Imposed PDF", suggested, "PDF Files (*.pdf)")
+            self, "Esporta PDF impaginato", suggested, "File PDF (*.pdf)")
         if not path:
             return
 
@@ -844,12 +860,12 @@ class MainWindow(QMainWindow):
         if not self._source_path:
             return False
         if _is_same_path(self._source_path, path):
-            self._status.showMessage("Cannot overwrite source PDF — choose a different output file")
+            self._status.showMessage("Cannot overwrite source PDF — choose a different output file (Impossibile sovrascrivere il PDF di origine)")
             return False
 
         project = self.build_project()
-        self._progress = QProgressDialog("Imposing…", "Cancel", 0, 100, self)
-        self._progress.setWindowTitle("Generating")
+        self._progress = QProgressDialog("Impaginazione in corso…", "Annulla", 0, 100, self)
+        self._progress.setWindowTitle("Generazione in corso")
         self._progress.setWindowModality(Qt.WindowModality.WindowModal)
         self._progress.setMinimumDuration(0)
         self._progress.canceled.connect(self._export.cancel)  # actually stops the work
@@ -863,7 +879,7 @@ class MainWindow(QMainWindow):
             return
         try:
             self._progress.setValue(int(current / total * 100) if total else 0)
-            self._progress.setLabelText(f"Sheet {min(current + 1, total)} of {total}")
+            self._progress.setLabelText(f"Foglio {min(current + 1, total)} di {total}")
         except RuntimeError:
             pass
 
@@ -878,16 +894,16 @@ class MainWindow(QMainWindow):
 
     def _on_export_done(self, sheets, path):
         self._close_progress()
-        self._status.showMessage(f"Exported {sheets} sheet(s) → {os.path.basename(path)}")
+        self._status.showMessage(f"Esportati {sheets} fogli → {os.path.basename(path)}")
         if not self._is_offscreen():
-            QMessageBox.information(self, "Export complete",
-                                    f"Wrote {sheets} sheet(s) to:\n{path}")
+            QMessageBox.information(self, "Esportazione completata",
+                                    f"Salvati {sheets} fogli in:\n{path}")
 
     def _on_export_failed(self, message):
         self._close_progress()
         self._status.showMessage(message)
-        if message != "Export cancelled" and not self._is_offscreen():
-            QMessageBox.critical(self, "Export failed", message)
+        if message != "Esportazione annullata" and not self._is_offscreen():
+            QMessageBox.critical(self, "Esportazione non riuscita", message)
 
     # ── help ─────────────────────────────────────
 
@@ -904,23 +920,23 @@ class MainWindow(QMainWindow):
     def _on_about(self):
         html = (
             f"<h2 style='color:{t.ACCENT}; margin-bottom:2px'>Laydown {__version__}</h2>"
-            f"<p style='color:{t.FG_MUTED}; margin-top:0'>PDF imposition for commercial printing</p>"
-            "<p>Lay your PDF pages out on the press sheet — n-up layouts, booklets "
-            "(saddle stitch and perfect binding), printer's marks, and trim/bleed-aware "
-            "placement — with a live preview of the finished sheet before you print.</p>"
-            "<p>Imposition is <b>vector</b>: pages are embedded, never rasterized, so quality "
-            "always follows the source. Everything runs on your machine — nothing is uploaded, "
-            "no account, no telemetry.</p>"
-            "<p>Built with Python, PyQt6 and PyMuPDF.</p>"
-            "<p><b>Created by Daniel Mevit</b> — "
+            f"<p style='color:{t.FG_MUTED}; margin-top:0'>Imposizione PDF per la stampa commerciale</p>"
+            "<p>Disponi le pagine del tuo PDF sul foglio di stampa — layout n-up, opuscoli "
+            "(punto metallico e brossura), segni e crocini di stampa, e posizionamento "
+            "con rifilo/abbondanza — con un'anteprima in tempo reale del foglio prima della stampa.</p>"
+            "<p>L'imposizione è <b>vettoriale</b>: le pagine sono incorporate, mai rasterizzate, quindi la qualità "
+            "corrisponde sempre all'originale. Tutto viene eseguito in locale sul tuo computer — nessun caricamento online, "
+            "nessun account, nessuna telemetria.</p>"
+            "<p>Creato con Python, PyQt6 e PyMuPDF.</p>"
+            "<p><b>Creato da Daniel Mevit</b> — "
             "<a href='https://damt.xyz'>damt.xyz</a><br>"
-            "Free and open source under the "
+            "Software libero e open source sotto licenza "
             "<a href='https://www.gnu.org/licenses/agpl-3.0.html'>GNU AGPL v3.0</a> · "
-            "<a href='https://github.com/danielmevit/laydown'>source on GitHub</a></p>"
+            "<a href='https://github.com/danielmevit/laydown'>codice sorgente su GitHub</a></p>"
             f"<p style='color:{t.FG_FAINT}'>&copy; 2026 Daniel Mevit</p>"
         )
         box = QMessageBox(self)
-        box.setWindowTitle("About Laydown")
+        box.setWindowTitle("Informazioni su Laydown")
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setText(html)
         box.setIconPixmap(app_icon().pixmap(72, 72))

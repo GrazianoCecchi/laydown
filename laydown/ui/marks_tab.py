@@ -13,6 +13,19 @@ from laydown.ui import theme as t
 
 _AVAILABLE = list(MarkType)
 
+MARK_TYPE_LABELS = {
+    MarkType.CROP_MARKS: "Crocini di taglio",
+    MarkType.GAP_CROP_MARKS: "Crocini con spazio",
+    MarkType.TRIM_LINE: "Linea di rifilo",
+    MarkType.REGISTRATION: "Crocini di registro",
+    MarkType.FOLDING_MARKS: "Segni di piega",
+    MarkType.PERFORATION_MARKS: "Segni di perforazione",
+    MarkType.COLLATING_MARKS: "Segnature per fascicolazione",
+    MarkType.COLOR_BAR: "Barra colore",
+    MarkType.TEXT_LABEL: "Etichetta di testo",
+    MarkType.CUSTOM_MARK: "Segno personalizzato (PDF)",
+}
+
 
 class MarksTab(QWidget):
     changed = pyqtSignal()
@@ -26,7 +39,7 @@ class MarksTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        lbl = QLabel("Print marks added to the output sheet.")
+        lbl = QLabel("Segni e crocini di stampa aggiunti al foglio di uscita.")
         lbl.setWordWrap(True)
         lbl.setStyleSheet(f"color:{t.FG_MUTED}; font-size:{t.TEXT_2XS}px; margin-bottom:6px;")
         root.addWidget(lbl)
@@ -38,7 +51,7 @@ class MarksTab(QWidget):
         self._list.setMaximumHeight(180)
         root.addWidget(self._list)
 
-        self._empty = QLabel("No marks — sheets print clean.")
+        self._empty = QLabel("Nessun segno — i fogli verranno stampati puliti.")
         self._empty.setWordWrap(True)
         self._empty.setStyleSheet(
             f"color:{t.FG_FAINT}; font-size:{t.TEXT_2XS}px; padding:2px 2px 6px 2px;")
@@ -47,7 +60,7 @@ class MarksTab(QWidget):
         btn_row = QHBoxLayout()
         self._add_combo = QComboBox()
         for mt in _AVAILABLE:
-            self._add_combo.addItem(mt.value, mt)
+            self._add_combo.addItem(MARK_TYPE_LABELS.get(mt, mt.value), mt)
         btn_row.addWidget(self._add_combo, stretch=1)
 
         add_btn = QPushButton("+")
@@ -62,7 +75,7 @@ class MarksTab(QWidget):
         root.addLayout(btn_row)
 
         # Settings stack
-        self._settings_group = QGroupBox("Mark Settings")
+        self._settings_group = QGroupBox("Impostazioni segno")
         sgl = QVBoxLayout(self._settings_group)
         self._stack = QStackedWidget()
         sgl.addWidget(self._stack)
@@ -78,30 +91,30 @@ class MarksTab(QWidget):
         self._crop_len.setValue(5.0)
         self._crop_len.setSuffix(" mm")
         self._crop_len.valueChanged.connect(self._on_param)
-        cl.addRow("Length:", self._crop_len)
+        cl.addRow("Lunghezza:", self._crop_len)
 
         self._crop_off = QDoubleSpinBox()
         self._crop_off.setRange(0, 20)
         self._crop_off.setValue(3.0)
         self._crop_off.setSuffix(" mm")
         self._crop_off.valueChanged.connect(self._on_param)
-        cl.addRow("Offset:", self._crop_off)
+        cl.addRow("Distanza:", self._crop_off)
         self._stack.addWidget(crop_w)
 
         # 2 — Text label settings
         txt_w = QWidget()
         tl = QFormLayout(txt_w)
         self._label_edit = QLineEdit()
-        self._label_edit.setPlaceholderText("(auto: filename + sheet info)")
+        self._label_edit.setPlaceholderText("(auto: nome file + info foglio)")
         self._label_edit.textChanged.connect(self._on_param)
-        tl.addRow("Text:", self._label_edit)
+        tl.addRow("Testo:", self._label_edit)
 
         self._label_size = QSpinBox()
         self._label_size.setRange(4, 24)
         self._label_size.setValue(8)
         self._label_size.setSuffix(" pt")
         self._label_size.valueChanged.connect(self._on_param)
-        tl.addRow("Font size:", self._label_size)
+        tl.addRow("Dimensione carattere:", self._label_size)
         self._stack.addWidget(txt_w)
 
         # 3 — Folding marks settings
@@ -112,7 +125,7 @@ class MarksTab(QWidget):
         self._fold_len.setValue(10.0)
         self._fold_len.setSuffix(" mm")
         self._fold_len.valueChanged.connect(self._on_param)
-        fl.addRow("Line length:", self._fold_len)
+        fl.addRow("Lunghezza linea:", self._fold_len)
         self._stack.addWidget(fold_w)
 
         # 4 — Custom mark: any PDF, stamped on the sheet
@@ -120,35 +133,35 @@ class MarksTab(QWidget):
         xl = QFormLayout(custom_w)
         picker = QHBoxLayout()
         self._mark_path = QLineEdit()
-        self._mark_path.setPlaceholderText("a PDF to stamp on the sheet")
+        self._mark_path.setPlaceholderText("un PDF da applicare sul foglio")
         self._mark_path.textChanged.connect(self._on_param)
         picker.addWidget(self._mark_path, stretch=1)
         browse = QPushButton("…")
         browse.setFixedWidth(28)
         browse.clicked.connect(self._on_browse_mark)
         picker.addWidget(browse)
-        xl.addRow("Artwork:", picker)
+        xl.addRow("Grafica:", picker)
 
         self._mark_w = QDoubleSpinBox()
         self._mark_w.setRange(1, 500)
         self._mark_w.setValue(20.0)
         self._mark_w.setSuffix(" mm")
         self._mark_w.valueChanged.connect(self._on_param)
-        xl.addRow("Width:", self._mark_w)
+        xl.addRow("Larghezza:", self._mark_w)
 
         self._mark_x = QDoubleSpinBox()
         self._mark_x.setRange(0, 5000)
         self._mark_x.setValue(10.0)
         self._mark_x.setSuffix(" mm")
         self._mark_x.valueChanged.connect(self._on_param)
-        xl.addRow("From left:", self._mark_x)
+        xl.addRow("Da sinistra:", self._mark_x)
 
         self._mark_y = QDoubleSpinBox()
         self._mark_y.setRange(0, 5000)
         self._mark_y.setValue(10.0)
         self._mark_y.setSuffix(" mm")
         self._mark_y.valueChanged.connect(self._on_param)
-        xl.addRow("From top:", self._mark_y)
+        xl.addRow("Dall'alto:", self._mark_y)
         self._stack.addWidget(custom_w)
 
         root.addWidget(self._settings_group)
@@ -158,7 +171,7 @@ class MarksTab(QWidget):
     def _on_browse_mark(self):
         from PyQt6.QtWidgets import QFileDialog
         path, _ = QFileDialog.getOpenFileName(
-            self, "Choose mark artwork", "", "PDF Files (*.pdf)")
+            self, "Scegli grafica per il segno", "", "PDF Files (*.pdf)")
         if path:
             self._mark_path.setText(path)
 
@@ -177,7 +190,8 @@ class MarksTab(QWidget):
         self._list.clear()
         for m in self._items:
             prefix = "✓" if m.enabled else "✗"
-            self._list.addItem(f"{prefix}  {m.mark_type.value}")
+            label = MARK_TYPE_LABELS.get(m.mark_type, m.mark_type.value)
+            self._list.addItem(f"{prefix}  {label}")
         self._settings_group.setVisible(False)
         self._empty.setVisible(not self._items)
 

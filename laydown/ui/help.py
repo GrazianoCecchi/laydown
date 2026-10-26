@@ -19,12 +19,12 @@ def _control_rows(section) -> str:
     rows = []
     for control in section.controls:
         if control.type is ControlType.COLLECTION:
-            what = "Add, remove and configure items in this list."
+            what = "Aggiungi, rimuovi e configura gli elementi in questo elenco."
         else:
             what = control.description or ""
             if control.options:
                 choices = ", ".join(escape(str(text)) for _, text in control.options)
-                what = f"{what} <i>Choices: {choices}.</i>" if what else f"Choices: {choices}."
+                what = f"{what} <i>Opzioni: {choices}.</i>" if what else f"Opzioni: {choices}."
         rows.append(
             f"<tr><td><b>{escape(control.label)}</b></td><td>{what}</td></tr>"
         )
@@ -38,8 +38,8 @@ def _schema_reference() -> str:
         for section in tab.sections:
             blocks.append(
                 f"<h3>{escape(section.title)}</h3>"
-                f"<p class='entity'>Controls {escape(section.entity)}.</p>"
-                f"<table><tr><th>Setting</th><th>What it does</th></tr>"
+                f"<p class='entity'>Controlla {escape(section.entity)}.</p>"
+                f"<table><tr><th>Impostazione</th><th>Descrizione</th></tr>"
                 f"{_control_rows(section)}</table>"
             )
     return "".join(blocks)
@@ -62,48 +62,48 @@ i {{ color:{t.FG_MUTED}; }}
 </style></head><body>
 
 <h1>Laydown {escape(__version__)}</h1>
-<p>Lay source pages out on press sheets. Imposition is vector — pages are embedded,
-never rasterized, so output quality always matches the source.</p>
+<p>Disponi le pagine di origine sui fogli macchina per la stampa. L'imposizione è vettoriale — le pagine sono incorporate,
+mai rasterizzate, garantendo che la qualità di stampa corrisponda sempre all'originale.</p>
 
-<h2>Getting started</h2>
-<p><b>File → Open PDF</b> (Ctrl+O), or drag a PDF onto the window. The canvas shows every
-imposed sheet exactly as it will print. Click <b style="color:{t.ACCENT}">Generate PDF</b>
-(Ctrl+G) to export.</p>
-<div class="tip"><b>The preview is the output.</b> Sheets are rendered from a real
-imposition, and the magenta outlines are the cut lines that run actually used — not a
-separate drawing that might disagree.</div>
+<h2>Primi passi</h2>
+<p><b>File → Apri PDF</b> (Ctrl+O), oppure trascina un PDF nella finestra. L'area di disegno mostra ogni
+foglio impaginato esattamente come verrà stampato. Fai clic su <b style="color:{t.ACCENT}">Genera PDF</b>
+(Ctrl+G) per esportare.</p>
+<div class="tip"><b>L'anteprima corrisponde all'output reale.</b> I fogli vengono visualizzati a partire da una vera
+imposizione, e i contorni magenta sono le linee di taglio effettivamente utilizzate dal motore — non un
+disegno separato o approssimato.</div>
 
-<h2>Bleed and boxes</h2>
-<p>A press-ready PDF marks its finished page with a <b>trim box</b> and paints artwork past
-it to a <b>bleed box</b>. Laydown imposes the trim box by default, so what lands on the
-cell is the finished page. Files without boxes are unaffected: PDF makes the trim box fall
-back to the whole page. Set a <b>bleed</b> under Source to carry artwork past the cut line
-so a slightly off cut still lands on ink.</p>
+<h2>Abbondanza e riquadri pagina</h2>
+<p>Un PDF pronto per la stampa specifica la pagina finita con il <b>Trim Box</b> (riquadro di rifilo) e prosegue la grafica fino
+al <b>Bleed Box</b> (riquadro di abbondanza). Laydown impagina il Trim Box per impostazione predefinita, in modo che nella
+cella finisca la pagina tagliata corretta. I file senza riquadri non hanno problemi: le specifiche PDF prevedono che il Trim Box corrisponda
+all'intera pagina. Imposta un valore di <b>abbondanza</b> nella scheda Origine per estendere la grafica oltre la linea di taglio,
+evitando bordi bianchi in caso di imprecisione nel taglio.</p>
 
 {_schema_reference()}
 
-<h2>View overlays</h2>
+<h2>Sovrimpressioni di visualizzazione</h2>
 <table>
-<tr><th>Toggle</th><th>Shortcut</th><th>Shows</th></tr>
-<tr><td>Page Numbers</td><td>Alt+1</td><td>Which source page sits in each cell</td></tr>
-<tr><td>Cut Lines</td><td>Alt+2</td><td>Where each page will be trimmed</td></tr>
-<tr><td>Page Tops</td><td>Alt+3</td><td>Which edge is the top — check rotation</td></tr>
-<tr><td>Page Previews</td><td>Alt+4</td><td>The page content itself</td></tr>
+<tr><th>Opzione</th><th>Scelta rapida</th><th>Descrizione</th></tr>
+<tr><td>Numeri di pagina</td><td>Alt+1</td><td>Quale pagina di origine si trova in ciascuna cella</td></tr>
+<tr><td>Linee di taglio</td><td>Alt+2</td><td>Dove verrà rifilata ciascuna pagina</td></tr>
+<tr><td>Parte superiore pagine</td><td>Alt+3</td><td>Indica il bordo superiore — per verificare l'orientamento</td></tr>
+<tr><td>Anteprime pagine</td><td>Alt+4</td><td>Il contenuto effettivo della pagina</td></tr>
 </table>
 
-<h2>Presets</h2>
-<p><b>File → Save Preset</b> writes every setting to a small JSON file;
-<b>Load Preset</b> restores it. Handy for a recurring job.</p>
+<h2>Predefiniti</h2>
+<p><b>File → Salva predefinito</b> salva tutte le impostazioni in un file JSON;
+<b>Carica predefinito</b> le ripristina. Molto utile per commesse ricorrenti.</p>
 
-<h2>Keyboard</h2>
+<h2>Scorciatoie da tastiera</h2>
 <table>
-<tr><td>Ctrl+O</td><td>Open PDF</td></tr>
-<tr><td>Ctrl+G</td><td>Generate PDF</td></tr>
-<tr><td>Ctrl+Z / Ctrl+Y</td><td>Undo / redo a setting</td></tr>
-<tr><td>Ctrl++ / Ctrl+-</td><td>Zoom in / out</td></tr>
-<tr><td>Ctrl+0</td><td>Fit to width</td></tr>
-<tr><td>Ctrl+F4</td><td>Close PDF</td></tr>
-<tr><td>F1</td><td>This page</td></tr>
+<tr><td>Ctrl+O</td><td>Apri PDF</td></tr>
+<tr><td>Ctrl+G</td><td>Genera PDF</td></tr>
+<tr><td>Ctrl+Z / Ctrl+Y</td><td>Annulla / Ripeti una modifica</td></tr>
+<tr><td>Ctrl++ / Ctrl+-</td><td>Ingrandisci / Riduci zoom</td></tr>
+<tr><td>Ctrl+0</td><td>Adatta alla larghezza</td></tr>
+<tr><td>Ctrl+F4</td><td>Chiudi PDF</td></tr>
+<tr><td>F1</td><td>Questa guida</td></tr>
 </table>
 </body></html>
 """
