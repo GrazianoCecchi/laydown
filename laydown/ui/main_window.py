@@ -293,6 +293,11 @@ class MainWindow(QMainWindow):
                                   shortcut=QKeySequence("Ctrl+F4"),
                                   enabled=False, triggered=self._on_close_pdf)
         file_menu.addAction(self._act_close)
+
+        self._act_inspect = QAction(mi("inspect"), "&Ispeziona PDF…", self,
+                                    shortcut=QKeySequence("Ctrl+I"),
+                                    enabled=False, triggered=self._on_inspect_pdf)
+        file_menu.addAction(self._act_inspect)
         file_menu.addSeparator()
 
         self._act_generate = QAction(mi("generate"), "&Genera PDF", self,
@@ -407,6 +412,12 @@ class MainWindow(QMainWindow):
             columns.addButton(button, count)
             row.addWidget(button)
         columns.idClicked.connect(lambda n: self._canvas.set_columns(n))
+
+        row.addWidget(_vsep())
+        self._btn_inspect = _tool_btn(lucide("inspect"), "Ispeziona PDF (Ctrl+I)")
+        self._btn_inspect.setEnabled(False)
+        self._btn_inspect.clicked.connect(self._on_inspect_pdf)
+        row.addWidget(self._btn_inspect)
 
         row.addStretch(1)
         for glyph, tip, slot in (
@@ -682,7 +693,8 @@ class MainWindow(QMainWindow):
                 self._close_source_doc()
                 self._source_path = ""
                 self._update_title()
-                for widget in (self._act_close, self._act_generate, self._generate):
+                for widget in (self._act_close, self._act_inspect, self._btn_inspect,
+                               self._act_generate, self._generate):
                     widget.setEnabled(False)
                 self._canvas.clear_all()
                 msg = "Questo PDF è protetto da password — rimuovi la password e aprilo di nuovo"
@@ -708,7 +720,8 @@ class MainWindow(QMainWindow):
         name = os.path.basename(path)
         self._update_title(name)
         self._status.showMessage(f"{name} — {count} pagin{'a' if count == 1 else 'e'}")
-        for widget in (self._act_close, self._act_generate, self._generate):
+        for widget in (self._act_close, self._act_inspect, self._btn_inspect,
+                       self._act_generate, self._generate):
             widget.setEnabled(True)
         self._add_recent(path)
         self._on_values_changed()
@@ -725,11 +738,19 @@ class MainWindow(QMainWindow):
         self._close_source_doc()
         self._source_path = ""
         self._update_title()
-        for widget in (self._act_close, self._act_generate, self._generate):
+        for widget in (self._act_close, self._act_inspect, self._btn_inspect,
+                       self._act_generate, self._generate):
             widget.setEnabled(False)
         self._canvas.clear_all()
         self._run_preflight()
         self._status.showMessage("PDF chiuso")
+
+    def _on_inspect_pdf(self):
+        if not self._source_doc or not self._source_path:
+            return
+        from laydown.ui.inspector_dialog import PdfInspectorDialog
+        dialog = PdfInspectorDialog(self._source_doc, self._source_path, self)
+        dialog.exec()
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         urls = event.mimeData().urls() if event.mimeData().hasUrls() else []

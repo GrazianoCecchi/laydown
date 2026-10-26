@@ -6,6 +6,23 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Strumento di Ispezione PDF (PDF Inspector) con visualizzazione grafica dei riquadri:**
+  - Aggiunto motore di analisi indipendente e senza dipendenze Qt (`laydown.engine.inspector`):
+    - Estrazione completa delle proprietà del documento (nome file, percorso, dimensione formattata, versione PDF, numero pagine, titolo, autore, oggetto, creatore, produttore, date di creazione e modifica, crittografia).
+    - Calcolo e misurazione precisa di tutti i riquadri pagina dello standard PDF (MediaBox, CropBox, BleedBox, TrimBox, ArtBox) sia in punti tipografici che in millimetri, con coordinate assolute e visive (tenendo conto della rotazione di pagina).
+    - Rilevamento dello stato di definizione del riquadro: esplicito (dichiarato nel dizionario di pagina PDF) o derivato/fallback.
+  - Aggiunta finestra di dialogo dedicata `PdfInspectorDialog` (`laydown.ui.inspector_dialog`):
+    - Header riassuntivo con badge per conteggio pagine, versione PDF e dimensione del file.
+    - Selettore di pagina con pulsanti avanti/indietro, spinbox e indicatore di rotazione.
+    - Tabella riassuntiva con dimensioni in mm, pt e stato per ciascun box.
+    - Riquadro metadati dettagliati del documento.
+    - Area di rendering grafico ad alta risoluzione (`_PageBoxCanvas`) che sovrappone i riquadri con colori distintivi dedicati (MediaBox grigio chiaro, CropBox verde smeraldo, BleedBox blu ciano, TrimBox rosa magenta, ArtBox ambra) e tratti personalizzati.
+    - Controlli interattivi di sovrapposizione: caselle di spunta individuali per mostrare/nascondere ciascun riquadro, toggle per etichette dimensionali agli angoli, e comandi di zoom (Ingrandisci, Riduci, Reimposta).
+  - Integrazione nell'interfaccia principale:
+    - Nuova voce di menu "Ispeziona PDF…" nel menu File (con scorciatoia `Ctrl+I`).
+    - Nuovo pulsante dedicato con icona `inspect` nella barra degli strumenti sopra l'anteprima, abilitato all'apertura del documento.
+  - Test di unità ed integrazione completi (`tests/test_inspector.py` e `tests/test_inspector_ui.py`).
+
 - **Traduzione completa in italiano dell'interfaccia utente:**
   - Tutti i menu della barra dei menu (File, Modifica, Visualizza, Aiuto), le relative azioni e le scorciatoie sono in italiano.
   - Tradotti i titoli delle schede, le sezioni, le etichette dei controlli, le descrizioni, i testi segnaposto e le opzioni dello schema (Origine, Layout, Foglio, Segni).
