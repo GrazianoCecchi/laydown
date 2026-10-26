@@ -6,6 +6,16 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Ripetizione e Duplicazione pagine (Step & Repeat / Riempi foglio):**
+  - Implementata la modalità di duplicazione e ripetizione per layout N-Up (`RepeatMode`):
+    - **Pagine consecutive (nessuna replica):** modalità tradizionale per documenti multipagina ordinati.
+    - **Riempi foglio (Step & Repeat):** replica ciascuna pagina del PDF di origine fino a saturare completamente tutte le celle della griglia del foglio (perfetto per stampare plance di biglietti da visita, etichette o volantini partendo da un PDF a pagina singola o fronte/retro).
+    - **Numero copie per pagina:** consente all'utente di definire un numero fisso di repliche da produrre per ciascuna pagina del file di origine.
+  - Estesa la griglia N-Up con formati standard tipografici:
+    - Aggiunti preset veloci: **10-Up (2 × 5)** (ideale per 10 biglietti da visita su foglio A4), **12-Up (3 × 4)**, **20-Up (4 × 5)** (ideale per 20 biglietti da visita su foglio A3), **24-Up (4 × 6)**, **25-Up (5 × 5)** e **32-Up (4 × 8)**.
+    - Aggiunta opzione **Griglia personalizzata** per impostare liberamente qualsiasi numero di Colonne e Righe.
+  - Aggiornato il modello dati (`LayoutSettings.repeat_mode`, `LayoutSettings.repeat_count`), la matrice di capacità (`capabilities.py`), la logica di pianificazione (`geometry._plan_nup`), lo schema dell'interfaccia (`schema.py`) e aggiunta la suite di test dedicata in `tests/test_layout_depth.py`.
+
 - **Popup descrittivi ed evidenziazione interattiva per ciascun riquadro (Page Box):**
   - Aggiunti popup informativi ricchi (HTML) per tutti i riquadri dello standard PDF (MediaBox, CropBox, BleedBox, TrimBox, ArtBox) che spiegano con chiarezza la funzione tipografica, le dimensioni correnti e lo stato (Dichiarato vs Derivato).
   - I popup appaiono passando il cursore del mouse:

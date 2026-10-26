@@ -27,6 +27,7 @@ from laydown.engine.data_model import (
     LayoutType,
     PageScaling,
     Project,
+    RepeatMode,
     SourceBox,
     SourceSettings,
 )
@@ -54,7 +55,21 @@ def margins_pt(project: Project) -> Tuple[float, float, float, float]:
 
 # Convenience grids for the plain "N pages per sheet" choice. Anything not listed
 # here is expressed by setting rows/cols directly.
-_NUP_GRIDS = {1: (1, 1), 2: (2, 1), 4: (2, 2), 6: (3, 2), 8: (4, 2), 9: (3, 3), 16: (4, 4)}
+_NUP_GRIDS = {
+    1: (1, 1),
+    2: (2, 1),
+    4: (2, 2),
+    6: (3, 2),
+    8: (4, 2),
+    9: (3, 3),
+    10: (2, 5),
+    12: (3, 4),
+    16: (4, 4),
+    20: (4, 5),
+    24: (4, 6),
+    25: (5, 5),
+    32: (4, 8),
+}
 
 
 def grid_for(layout) -> Tuple[int, int]:
@@ -64,6 +79,10 @@ def grid_for(layout) -> Tuple[int, int]:
             raise ValueError(
                 f"rows and cols must be at least 1, got {layout.rows}×{layout.cols}")
         return layout.cols, layout.rows
+    if layout.nup == 0:
+        cols = layout.cols if layout.cols >= 1 else 2
+        rows = layout.rows if layout.rows >= 1 else 2
+        return cols, rows
     try:
         return _NUP_GRIDS[layout.nup]
     except KeyError:
@@ -436,7 +455,20 @@ def _plan_nup(project: Project, page_indices: List[int]) -> List[Sheet]:
     cells = cell_grid(project, cols, rows)
     per_sheet = cols * rows
 
-    n = len(page_indices)
+    mode = project.layout.repeat_mode
+    if mode == RepeatMode.FILL_SHEET:
+        effective_indices = []
+        for p in page_indices:
+            effective_indices.extend([p] * per_sheet)
+    elif mode == RepeatMode.COPIES:
+        copies = max(1, project.layout.repeat_count)
+        effective_indices = []
+        for p in page_indices:
+            effective_indices.extend([p] * copies)
+    else:
+        effective_indices = page_indices
+
+    n = len(effective_indices)
     num_sheets = max(1, (n + per_sheet - 1) // per_sheet)
 
     sheets = []
@@ -446,7 +478,7 @@ def _plan_nup(project: Project, page_indices: List[int]) -> List[Sheet]:
             idx = si * per_sheet + ci
             if idx >= n:
                 break
-            placements.append(Placement(cells[ci], page_indices[idx]))
+            placements.append(Placement(cells[ci], effective_indices[idx]))
         sheets.append(Sheet(placements=placements, number=si + 1, total=num_sheets))
     return sheets
 

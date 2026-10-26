@@ -132,15 +132,33 @@ class PageScaling(Enum):
     FIT_TO_CELL = "Fit to cell"
 
 
+class RepeatMode(Enum):
+    """
+    How pages are repeated in an N-Up layout.
+
+    OFF: pages are placed in consecutive order (page 1, 2, 3...).
+    FILL_SHEET: each source page is replicated to completely fill the sheet's grid cells
+                (Step & Repeat, ideal for business cards and labels).
+    COPIES: each source page is replicated a specific number of times (repeat_count).
+    """
+    OFF = "Off"
+    FILL_SHEET = "Fill sheet"
+    COPIES = "Copies"
+
+
 @dataclass
 class LayoutSettings:
     layout_type: LayoutType = LayoutType.NUP
 
     # N-Up. rows/cols override nup when both are set.
-    nup: int = 2  # 2, 4
+    nup: int = 2  # 1, 2, 4, 6, 8, 9, 10, 12, 16, 20, 24, 25, 32 (or 0 for rows x cols)
     rows: int = 0
     cols: int = 0
     auto_rotate: bool = False  # turn a page 90° when that fits its cell better
+
+    # Step & Repeat / Duplication mode
+    repeat_mode: RepeatMode = RepeatMode.OFF
+    repeat_count: int = 1  # used when repeat_mode == RepeatMode.COPIES
 
     # Sizing (see PageScaling): shrink to fit by default, fill only on request.
     scaling: PageScaling = PageScaling.ACTUAL_SIZE

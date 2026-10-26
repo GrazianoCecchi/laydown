@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Callable, Optional, Sequence, Tuple
 
 from laydown.engine.data_model import (
-    BookletMode, LayoutType, Orientation, PageScaling, SourceBox, SHEET_PRESETS_MM,
+    BookletMode, LayoutType, Orientation, PageScaling, RepeatMode, SourceBox, SHEET_PRESETS_MM,
 )
 
 
@@ -112,6 +112,12 @@ _ORIENTATION_OPTIONS = (
     (Orientation.PORTRAIT, "Verticale"),
 )
 
+_REPEAT_OPTIONS = (
+    (RepeatMode.OFF, "Pagine consecutive"),
+    (RepeatMode.FILL_SHEET, "Riempi foglio (Step & Repeat)"),
+    (RepeatMode.COPIES, "Numero copie"),
+)
+
 _PRESET_OPTIONS = tuple((k, k) for k in SHEET_PRESETS_MM) + (("Custom", "Personalizzato"),)
 
 _IS_BOOKLET = When(target="layout.layout_type", equals=LayoutType.BOOKLET)
@@ -185,8 +191,34 @@ SCHEMA: Tuple[Tab, ...] = (
                         label="Pagine per foglio",
                         default=2,
                         options=((1, "1-Up"), (2, "2-Up"), (4, "4-Up"), (6, "6-Up"),
-                                 (8, "8-Up"), (9, "9-Up"), (16, "16-Up")),
+                                 (8, "8-Up"), (9, "9-Up"), (10, "10-Up (2 × 5)"),
+                                 (12, "12-Up (3 × 4)"), (16, "16-Up (4 × 4)"),
+                                 (20, "20-Up (4 × 5)"), (24, "24-Up (4 × 6)"),
+                                 (25, "25-Up (5 × 5)"), (32, "32-Up (4 × 8)"),
+                                 (0, "Griglia personalizzata (Righe × Colonne)")),
                         visible_when=_IS_NUP,
+                    ),
+                    Control(
+                        type=ControlType.NUMBER,
+                        target="layout.cols",
+                        label="Colonne",
+                        default=0,
+                        minimum=0,
+                        maximum=50,
+                        step=1,
+                        description="Numero di colonne della griglia (utilizzato con Griglia personalizzata).",
+                        visible_when=When(target="layout.nup", equals=0),
+                    ),
+                    Control(
+                        type=ControlType.NUMBER,
+                        target="layout.rows",
+                        label="Righe",
+                        default=0,
+                        minimum=0,
+                        maximum=50,
+                        step=1,
+                        description="Numero di righe della griglia (utilizzato con Griglia personalizzata).",
+                        visible_when=When(target="layout.nup", equals=0),
                     ),
                     Control(
                         type=ControlType.SWITCH,
@@ -210,6 +242,37 @@ SCHEMA: Tuple[Tab, ...] = (
                             "ingrandendo quelle più piccole."
                         ),
                         options=_SCALING_OPTIONS,
+                    ),
+                ),
+            ),
+            Section(
+                title="Ripetizione (Step & Repeat)",
+                entity="duplicazione e riempimento delle pagine sul foglio",
+                visible_when=_IS_NUP,
+                controls=(
+                    Control(
+                        type=ControlType.SELECT,
+                        target="layout.repeat_mode",
+                        label="Modalità",
+                        default=RepeatMode.OFF,
+                        description=(
+                            "Pagine consecutive distribuisce le pagine del PDF una dopo l'altra. "
+                            "Riempi foglio (Step & Repeat) replica ciascuna pagina fino a saturare tutte le celle del foglio "
+                            "(ideale per biglietti da visita, etichette e volantini). "
+                            "Numero copie permette di specificare quante copie produrre per ciascuna pagina."
+                        ),
+                        options=_REPEAT_OPTIONS,
+                    ),
+                    Control(
+                        type=ControlType.NUMBER,
+                        target="layout.repeat_count",
+                        label="Copie per pagina",
+                        default=1,
+                        minimum=1,
+                        maximum=9999,
+                        step=1,
+                        description="Numero di copie da produrre per ciascuna pagina sorgente.",
+                        visible_when=When(target="layout.repeat_mode", equals=RepeatMode.COPIES),
                     ),
                 ),
             ),

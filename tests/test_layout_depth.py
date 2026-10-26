@@ -9,7 +9,7 @@ import pytest
 
 from laydown.engine.data_model import (
     Project, LayoutSettings, LayoutType, SheetSettings, Orientation, BookletMode,
-    PageScaling,
+    PageScaling, RepeatMode,
 )
 from laydown.engine.geometry import (
     booklet_page_order, grid_for, padded_slots, signature_groups, creep_shift_pt,
@@ -35,13 +35,17 @@ def booklet_layout(**kw):
 
 class TestNUpGrids:
     @pytest.mark.parametrize("nup,expected", [
-        (1, (1, 1)), (2, (2, 1)), (4, (2, 2)), (6, (3, 2)), (8, (4, 2)), (9, (3, 3)), (16, (4, 4)),
+        (1, (1, 1)), (2, (2, 1)), (4, (2, 2)), (6, (3, 2)), (8, (4, 2)), (9, (3, 3)),
+        (10, (2, 5)), (12, (3, 4)), (16, (4, 4)), (20, (4, 5)), (24, (4, 6)), (25, (5, 5)), (32, (4, 8)),
     ])
     def test_named_grids(self, nup, expected):
         assert grid_for(LayoutSettings(nup=nup)) == expected
 
     def test_explicit_rows_and_cols_win(self):
         assert grid_for(LayoutSettings(nup=2, rows=3, cols=5)) == (5, 3)
+
+    def test_custom_grid_with_nup_zero(self):
+        assert grid_for(LayoutSettings(nup=0, rows=4, cols=5)) == (5, 4)
 
     def test_unknown_nup_is_rejected(self):
         with pytest.raises(ValueError, match="nup must be"):
@@ -339,3 +343,67 @@ class TestCreep:
         project.layout = booklet_layout(creep_enabled=False, creep_inner_mm=3.0)
         placed = impose_detailed(project, out_path()).placed
         assert placed[6][0].trim.x0 == pytest.approx(placed[0][0].trim.x0)
+
+
+# ── Step & Repeat / Duplication ───────────────────────
+
+class TestStepAndRepeat:
+    def test_fill_sheet_replicates_single_page_to_all_cells(self, source_pdf, out_path):
+        """A 1-page business card under 4-Up with FILL_SHEET fills all 4 cells."""
+        src = source_pdf(n_pages=1)
+        project = a_project(
+            src, nup=4,
+            repeat_mode=RepeatMode.FILL_SHEET,
+        )
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 1
+        assert len(res.placed[0]) == 4
+        # Every placement on the sheet points to source page 1
+        for placed_page in res.placed[0]:
+            assert placed_page.page_number == 1
+
+    def test_fill_sheet_replicates_each_page_to_its_own_full_sheet(self, source_pdf, out_path):
+        """A 2-page document (front and back) under 4-Up fills sheet 1 with page 1, sheet 2 with page 2."""
+        src = source_pdf(n_pages=2)
+        project = a_project(
+            src, nup=4,
+            repeat_mode=RepeatMode.FILL_SHEET,
+        )
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 2
+        # Sheet 1: 4 copies of page 1
+        assert len(res.placed[0]) == 4
+        for p in res.placed[0]:
+            assert p.page_number == 1
+        # Sheet 2: 4 copies of page 2
+        assert len(res.placed[1]) == 4
+        for p in res.placed[1]:
+            assert p.page_number == 2
+
+    def test_custom_copies_replicates_specified_count(self, source_pdf, out_path):
+        """Setting COPIES with repeat_count=5 in a 4-Up produces 2 sheets: 4 on sheet 1, 1 on sheet 2."""
+        src = source_pdf(n_pages=1)
+        project = a_project(
+            src, nup=4,
+            repeat_mode=RepeatMode.COPIES,
+            repeat_count=5,
+        )
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 2
+        assert len(res.placed[0]) == 4
+        assert len(res.placed[1]) == 1
+        assert res.placed[1][0].page_number == 1
+
+    def test_fill_sheet_with_business_card_grid_20up(self, source_pdf, out_path):
+        """20-Up grid with FILL_SHEET produces exactly 20 copies on 1 sheet."""
+        src = source_pdf(n_pages=1)
+        project = a_project(
+            src, nup=20,
+            repeat_mode=RepeatMode.FILL_SHEET,
+        )
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 1
+        assert len(res.placed[0]) == 20
+        for p in res.placed[0]:
+            assert p.page_number == 1
+
