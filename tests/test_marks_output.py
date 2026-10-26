@@ -200,3 +200,74 @@ class TestTextLabel:
         words = {w[4] for w in fitz.open(out)[0].get_text("words")}
         assert "src.pdf" in words, "the auto filename label is gone"
         assert {"Sheet", "1", "of", "1"} <= words
+
+
+# ── crop marks: outer perimeter only ─────────────────
+
+
+class TestCropMarksOuterOnly:
+    def test_crop_marks_outer_only_omits_interior_marks(self, source_pdf, out_path):
+        """When crop_outer_only is True, all lines are placed strictly outside the cells bounding box."""
+        src = source_pdf(n_pages=4, w_mm=85.0, h_mm=55.0)
+        project = a_project(src, cols=2, rows=2, margin=20.0, gutter_h_mm=5.0, gutter_v_mm=5.0)
+        project.marks = [MarkItem(mark_type=MarkType.CROP_MARKS, crop_outer_only=True)]
+
+        out = out_path()
+        res = impose_detailed(project, out)
+        placed = res.placed[0]
+
+        bbox_x0 = min(p.trim.x0 for p in placed)
+        bbox_x1 = max(p.trim.x1 for p in placed)
+        bbox_y0 = min(p.trim.y0 for p in placed)
+        bbox_y1 = max(p.trim.y1 for p in placed)
+
+        page = fitz.open(out)[0]
+        drawings = page.get_drawings()
+        lines = []
+        for d in drawings:
+            for item in d["items"]:
+                if item[0] == "l":  # line segment (p1, p2)
+                    p1, p2 = item[1], item[2]
+                    lines.append((p1, p2))
+
+        assert len(lines) > 0
+        # Every line must be strictly outside the interior of [bbox_x0, bbox_y0, bbox_x1, bbox_y1]
+        for p1, p2 in lines:
+            mid_x = (p1.x + p2.x) / 2.0
+            mid_y = (p1.y + p2.y) / 2.0
+            is_outside = (
+                mid_x < bbox_x0 - 0.01 or mid_x > bbox_x1 + 0.01 or
+                mid_y < bbox_y0 - 0.01 or mid_y > bbox_y1 + 0.01
+            )
+            assert is_outside, f"Found crop mark line inside placed grid: {p1} -> {p2}"
+
+    def test_crop_marks_default_includes_interior_marks(self, source_pdf, out_path):
+        """When crop_outer_only is False, interior marks between cells are drawn."""
+        src = source_pdf(n_pages=4, w_mm=85.0, h_mm=55.0)
+        project = a_project(src, cols=2, rows=2, margin=20.0, gutter_h_mm=5.0, gutter_v_mm=5.0)
+        project.marks = [MarkItem(mark_type=MarkType.CROP_MARKS, crop_outer_only=False)]
+
+        out = out_path()
+        res = impose_detailed(project, out)
+        placed = res.placed[0]
+
+        bbox_x0 = min(p.trim.x0 for p in placed)
+        bbox_x1 = max(p.trim.x1 for p in placed)
+        bbox_y0 = min(p.trim.y0 for p in placed)
+        bbox_y1 = max(p.trim.y1 for p in placed)
+
+        page = fitz.open(out)[0]
+        drawings = page.get_drawings()
+        lines = []
+        for d in drawings:
+            for item in d["items"]:
+                if item[0] == "l":
+                    lines.append((item[1], item[2]))
+
+        interior_lines = [
+            (p1, p2) for p1, p2 in lines
+            if bbox_x0 + 0.01 <= (p1.x + p2.x) / 2.0 <= bbox_x1 - 0.01
+            and bbox_y0 + 0.01 <= (p1.y + p2.y) / 2.0 <= bbox_y1 - 0.01
+        ]
+        assert len(interior_lines) > 0, "Default crop marks should include interior marks between cells"
+

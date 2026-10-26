@@ -100,7 +100,7 @@ NOT_IMPLEMENTED: Set[str] = set()
 MARK_HONOURED: Dict[MarkType, Set[str]] = {
     # mark_type/enabled are read for every item before the type is dispatched.
     MarkType.CROP_MARKS: {
-        "mark_type", "enabled", "crop_length_mm", "crop_offset_mm", "crop_width_pt",
+        "mark_type", "enabled", "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only",
     },
     MarkType.GAP_CROP_MARKS: {
         "mark_type", "enabled", "crop_offset_mm", "crop_width_pt",
@@ -125,45 +125,45 @@ MARK_NOT_IMPLEMENTED: Dict[MarkType, Set[str]] = {
     # The Marks tab greys the Length control out for gap crop marks — these run
     # to the sheet edge and have no length — so it edits nothing unhonoured.
     MarkType.GAP_CROP_MARKS: {
-        "crop_length_mm", "label_text", "label_font_size", "fold_line_length_mm",
+        "crop_length_mm", "crop_outer_only", "label_text", "label_font_size", "fold_line_length_mm",
         "patch_size_mm", "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.TRIM_LINE: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "fold_line_length_mm", "patch_size_mm",
         "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.REGISTRATION: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "fold_line_length_mm", "patch_size_mm",
         "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.FOLDING_MARKS: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "patch_size_mm",
         "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.PERFORATION_MARKS: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "fold_line_length_mm", "patch_size_mm",
         "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.COLLATING_MARKS: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "fold_line_length_mm", "patch_size_mm",
         "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.COLOR_BAR: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "fold_line_length_mm",
         "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.TEXT_LABEL: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "fold_line_length_mm",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "fold_line_length_mm",
         "patch_size_mm", "mark_pdf_path", "mark_width_mm", "mark_x_mm", "mark_y_mm",
     },
     MarkType.CUSTOM_MARK: {
-        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "label_text",
+        "crop_length_mm", "crop_offset_mm", "crop_width_pt", "crop_outer_only", "label_text",
         "label_font_size", "fold_line_length_mm", "patch_size_mm",
     },
 }

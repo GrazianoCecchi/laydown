@@ -99,6 +99,14 @@ class MarksTab(QWidget):
         self._crop_off.setSuffix(" mm")
         self._crop_off.valueChanged.connect(self._on_param)
         cl.addRow("Distanza:", self._crop_off)
+
+        self._crop_outer_only = QCheckBox("Solo perimetrali (escludi interni)")
+        self._crop_outer_only.setToolTip(
+            "Disabilita tutti i crocini interni tra le pagine/copie, lasciando solo "
+            "quelli perimetrali all'esterno dell'insieme stampato per evitare che rimangano visibili dopo il taglio."
+        )
+        self._crop_outer_only.toggled.connect(self._on_param)
+        cl.addRow("", self._crop_outer_only)
         self._stack.addWidget(crop_w)
 
         # 2 — Text label settings
@@ -220,12 +228,16 @@ class MarksTab(QWidget):
         if m.mark_type in (MarkType.CROP_MARKS, MarkType.GAP_CROP_MARKS):
             self._stack.setCurrentIndex(1)
             self._crop_len.setEnabled(m.mark_type == MarkType.CROP_MARKS)
+            self._crop_outer_only.setVisible(m.mark_type == MarkType.CROP_MARKS)
             self._crop_len.blockSignals(True)
             self._crop_len.setValue(m.crop_length_mm)
             self._crop_len.blockSignals(False)
             self._crop_off.blockSignals(True)
             self._crop_off.setValue(m.crop_offset_mm)
             self._crop_off.blockSignals(False)
+            self._crop_outer_only.blockSignals(True)
+            self._crop_outer_only.setChecked(bool(getattr(m, "crop_outer_only", False)))
+            self._crop_outer_only.blockSignals(False)
         elif m.mark_type == MarkType.CUSTOM_MARK:
             self._stack.setCurrentIndex(4)
             for widget, value in ((self._mark_path, m.mark_pdf_path),
@@ -259,6 +271,8 @@ class MarksTab(QWidget):
         if m.mark_type in (MarkType.CROP_MARKS, MarkType.GAP_CROP_MARKS):
             m.crop_length_mm = self._crop_len.value()
             m.crop_offset_mm = self._crop_off.value()
+            if m.mark_type == MarkType.CROP_MARKS:
+                m.crop_outer_only = self._crop_outer_only.isChecked()
         elif m.mark_type == MarkType.CUSTOM_MARK:
             m.mark_pdf_path = self._mark_path.text()
             m.mark_width_mm = self._mark_w.value()

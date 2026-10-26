@@ -6,6 +6,15 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Opzione Crocini di taglio solo perimetrali (esclusione crocini interni):**
+  - Aggiunta l'opzione `crop_outer_only` in `MarkItem` e nell'interfaccia utente (scheda **Segni** > **Crocini di taglio** > casella di spunta *"Solo perimetrali (escludi interni)"*).
+  - Quando attiva, il motore di imposizione (`laydown.engine.marks._draw_crop_marks_outer`):
+    - Disabilita ed esclude completamente tutti i trattini interni compresi tra le pagine/copie adiacenti della griglia;
+    - Traccia esclusivamente i crocini perimetrali rivolti verso l'esterno (nei margini del foglio) in corrispondenza di ciascuna linea di taglio verticale (in alto e in basso) e orizzontale (a sinistra e a destra);
+    - Evita che eventuali imperfezioni nel taglio o tagli a filo (gutter a zero) lascino pezzetti di crocini neri visibili sugli angoli o sui bordi dei biglietti da visita o delle etichette stampate;
+    - Mantiene l'allineamento perfetto della lama da bordo a bordo del foglio per l'operatore alla ghigliottina.
+  - Aggiornata la matrice di capacità (`laydown.engine.capabilities`), il componente UI `MarksTab` (`marks_tab.py`) e aggiunta la suite di test dedicata in `tests/test_marks_output.py`.
+
 - **Posizionamento affiancato e centratura Step & Repeat (Ripetizione pagina per riempire il foglio):**
   - **Posizionamento affiancato (Side-by-side):** nella modalità di ripetizione pagina (`FILL_SHEET` e `COPIES`), ciascuna copia viene posizionata esattamente con le dimensioni del box selezionato dall'utente (TrimBox, MediaBox, CropBox, ecc.) invece di espandere le celle all'intero foglio con spaziatura interna indesiderata.
   - **Centratura rispetto all'area utile del foglio:** l'intero blocco delle copie (`cols × rows`) viene centrato perfettamente all'interno del foglio sottraendo i margini impostati (`start_x = ml + (avail_w - total_w)/2`, `start_y = mt + (avail_h - total_h)/2`), garantendo margini residui simmetrici a sinistra/destra e in alto/basso.

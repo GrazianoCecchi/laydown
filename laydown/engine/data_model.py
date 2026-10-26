@@ -243,6 +243,7 @@ class MarkItem:
     crop_length_mm: float = 5.0
     crop_offset_mm: float = 3.0
     crop_width_pt: float = 0.5
+    crop_outer_only: bool = False  # when True, draw crop marks only on outer perimeter of placed grid
 
     # Text label
     label_text: str = ""  # empty = auto (filename + sheet info)

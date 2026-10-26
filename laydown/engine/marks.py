@@ -149,8 +149,11 @@ def draw_marks(
         if not m.enabled:
             continue
         if m.mark_type == MarkType.CROP_MARKS:
-            for r in cell_rects:
-                _draw_crop_marks(reg, r, m.crop_length_mm, m.crop_offset_mm, m.crop_width_pt)
+            if getattr(m, "crop_outer_only", False):
+                _draw_crop_marks_outer(reg, cell_rects, m.crop_length_mm, m.crop_offset_mm, m.crop_width_pt)
+            else:
+                for r in cell_rects:
+                    _draw_crop_marks(reg, r, m.crop_length_mm, m.crop_offset_mm, m.crop_width_pt)
         elif m.mark_type == MarkType.GAP_CROP_MARKS:
             _draw_gap_crop_marks(reg, cell_rects, sheet_w, sheet_h,
                                  margin_l, margin_r, margin_t, margin_b,
@@ -204,6 +207,40 @@ def _draw_crop_marks(
     ]
     for a, b in lines:
         _reg_line(ops, a, b, width)
+
+
+def _draw_crop_marks_outer(
+    ops: List[str],
+    cell_rects: List[fitz.Rect],
+    length_mm: float = _CROP_LEN_MM,
+    offset_mm: float = _CROP_OFF_MM,
+    width: float = _CROP_W,
+) -> None:
+    """
+    Draw crop marks only along the outer perimeter of the placed cells block.
+
+    All interior crop marks between adjacent rows and columns are omitted,
+    preventing any cut marks from remaining on the printed items after guillotine trimming.
+    """
+    if not cell_rects:
+        return
+    ml = mm_to_pt(length_mm)
+    mo = mm_to_pt(offset_mm)
+
+    bbox_x0 = min(r.x0 for r in cell_rects)
+    bbox_x1 = max(r.x1 for r in cell_rects)
+    bbox_y0 = min(r.y0 for r in cell_rects)
+    bbox_y1 = max(r.y1 for r in cell_rects)
+
+    xs = sorted({r.x0 for r in cell_rects} | {r.x1 for r in cell_rects})
+    ys = sorted({r.y0 for r in cell_rects} | {r.y1 for r in cell_rects})
+
+    for x in xs:
+        _reg_line(ops, (x, bbox_y0 - mo - ml), (x, bbox_y0 - mo), width)
+        _reg_line(ops, (x, bbox_y1 + mo), (x, bbox_y1 + mo + ml), width)
+    for y in ys:
+        _reg_line(ops, (bbox_x0 - mo - ml, y), (bbox_x0 - mo, y), width)
+        _reg_line(ops, (bbox_x1 + mo, y), (bbox_x1 + mo + ml, y), width)
 
 
 # ── gap crop marks ──────────────────────────────────
