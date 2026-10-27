@@ -6,6 +6,29 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Procedura di stampa integrata e finestra professionale di anteprima di stampa:**
+  - **Modulo dedicato di stampa (`laydown/ui/print_dialog.py`):** creata una finestra di dialogo completa per la stampa di produzione (`PrintDialog`), stilizzata in modo coerente con il dark theme OKLCH dell'applicazione (`laydown.ui.theme`).
+  - **Pannello di controllo prestampa unificato:**
+    - **Selezione stampante:** rileva in tempo reale tutte le periferiche disponibili (`QPrinterInfo`), evidenziando la stampante predefinita e fornendo accesso diretto alle proprietà avanzate del driver di sistema.
+    - **Fogli e intervallo:** supporto per stampa di tutti i fogli, foglio corrente o intervallo personalizzato con sintassi flessibile (es. `1-3, 5`), con validazione visiva istantanea.
+    - **Copie e fascicolazione:** controllo del numero di copie e opzione di fascicolazione.
+    - **Fronte / Retro (Duplex):** selezione rapida tra *Solo fronte*, *Fronte/retro - Lato lungo* e *Fronte/retro - Lato corto*, con rilevamento e preimpostazione automatica per opuscoli e documenti a più fogli.
+    - **Carta e orientamento:** interrogazione dei formati supportati dalla stampante (`QPageSize`), con abbinamento automatico alle dimensioni del foglio imposto e orientamento (automatico, orizzontale o verticale).
+    - **Geometria e scala di prestampa:** opzioni essenziali per la grafica professionale: *100% Dimensioni reali (Do Not Scale)* per preservare millimetricamente rifili e crocini, *Adatta all'area stampabile* e *Riduci solo se sovradimensionato*, con centratura automatica sul foglio.
+    - **Avviso visivo margini non stampabili:** rilevamento e avviso automatico (badge card) se le dimensioni del foglio imposto o i crocini di taglio eccedono l'area utile o i margini fisici dei rulli della stampante selezionata.
+    - **Qualità di stampa:** selezione della risoluzione di rasterizzazione allo spooler (300 DPI per bozze veloci, 600 DPI per alta definizione, 1200 DPI per massima qualità).
+  - **Anteprima di stampa interattiva in tempo reale (`QPrintPreviewWidget`):**
+    - Visualizzazione fluida dei fogli imposti renderizzati ad alta precisione tramite PyMuPDF.
+    - Controlli completi di zoom (*Ingrandisci*, *Riduci*, *Adatta pagina*, *Adatta larghezza*, *100%*).
+    - Navigazione tra i fogli con indicatore del foglio corrente.
+    - Modalità di visualizzazione a pagina singola o pagine affiancate (*Facing pages* per confrontare fronte e retro).
+    - Riquadro tratteggiato opzionale per mostrare a video i margini fisici non stampabili della periferica.
+  - **Spooling asincrono su thread separato (`_PrintWorker`):** rasterizzazione ed invio allo spooler di stampa eseguiti in background su `QThread` con barra di progresso e possibilità di annullamento, senza mai congelare l'interfaccia grafica.
+  - **Punti di accesso nell'interfaccia:**
+    - Aggiunta scorciatoia da tastiera globale **Ctrl+P** e voce di menu **File → Stampa…** con icona Lucide `print`.
+    - Aggiunto pulsante rapido **Stampa…** nel footer della barra laterale sinistra accanto a *Genera PDF*.
+  - Aggiunta la suite di test dedicata in `tests/test_print_dialog.py`.
+
 - **Pagine consecutive con spaziature side-by-side e segnaposto per pagine mancanti:**
   - **Spaziature affiancate identiche a Step & Repeat:** nella modalità *"Pagine consecutive"* (`RepeatMode.OFF`), le pagine a dimensione reale (`ACTUAL_SIZE`) vengono posizionate affiancate rispettando al millimetro le impostazioni dei gutter orizzontale e verticale (`gutter_h_mm` e `gutter_v_mm`), con l'intero gruppo di celle centrato all'interno del foglio sottraendo i margini. Eliminato il distanziamento artificiale causato dalla suddivisione nominale del foglio su celle oversize.
   - **Segnaposto simulato per pagine mancanti sul foglio:** quando il documento sorgente non ha un numero sufficiente di pagine per completare tutte le pose del foglio (ad esempio un biglietto da visita da 1 sola pagina imposto su griglia 2×5 o un numero dispari di pagine sull'ultimo foglio), le celle rimanenti vengono popolate da un segnaposto (`is_placeholder=True`) che simula la grafica dell'ultima pagina inserita.

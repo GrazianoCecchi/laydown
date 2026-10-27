@@ -304,6 +304,11 @@ class MainWindow(QMainWindow):
                                      shortcut=QKeySequence("Ctrl+G"),
                                      enabled=False, triggered=self._on_export)
         file_menu.addAction(self._act_generate)
+
+        self._act_print = QAction(mi("print"), "&Stampa…", self,
+                                  shortcut=QKeySequence("Ctrl+P"),
+                                  enabled=False, triggered=self._on_print)
+        file_menu.addAction(self._act_print)
         file_menu.addSeparator()
         file_menu.addAction(QAction(mi("save_preset"), "Salva &predefinito…", self,
                                     triggered=self._on_save_preset))
@@ -620,14 +625,27 @@ class MainWindow(QMainWindow):
             f"#footer {{ background: {t.RAISED}; border-top: 1px solid {t.BORDER}; }}")
         row = QVBoxLayout(footer)
         row.setContentsMargins(t.SPACE_3, t.SPACE_3, t.SPACE_3, t.SPACE_3)
+        row.setSpacing(t.SPACE_2)
+
+        btns_row = QHBoxLayout()
+        btns_row.setSpacing(t.SPACE_2)
+
+        self._btn_print = QPushButton("  Stampa…")
+        self._btn_print.setIcon(lucide("print", 16, t.FG))
+        self._btn_print.setEnabled(False)
+        self._btn_print.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_print.clicked.connect(self._on_print)
 
         self._generate = QPushButton("  Genera PDF")
-        self._generate.setIcon(lucide("generate", 18, t.ACCENT_FG))
+        self._generate.setIcon(lucide("generate", 16, t.ACCENT_FG))
         self._generate.setProperty("accent", True)
         self._generate.setEnabled(False)
         self._generate.setCursor(Qt.CursorShape.PointingHandCursor)
         self._generate.clicked.connect(self._on_export)
-        row.addWidget(self._generate)
+
+        btns_row.addWidget(self._btn_print, 1)
+        btns_row.addWidget(self._generate, 1)
+        row.addLayout(btns_row)
         return footer
 
     def _on_tab_switch(self, index):
@@ -694,7 +712,8 @@ class MainWindow(QMainWindow):
                 self._source_path = ""
                 self._update_title()
                 for widget in (self._act_close, self._act_inspect, self._btn_inspect,
-                               self._act_generate, self._generate):
+                               self._act_generate, self._generate,
+                               self._act_print, self._btn_print):
                     widget.setEnabled(False)
                 self._canvas.clear_all()
                 msg = "Questo PDF è protetto da password — rimuovi la password e aprilo di nuovo"
@@ -721,7 +740,8 @@ class MainWindow(QMainWindow):
         self._update_title(name)
         self._status.showMessage(f"{name} — {count} pagin{'a' if count == 1 else 'e'}")
         for widget in (self._act_close, self._act_inspect, self._btn_inspect,
-                       self._act_generate, self._generate):
+                       self._act_generate, self._generate,
+                       self._act_print, self._btn_print):
             widget.setEnabled(True)
         self._add_recent(path)
         self._on_values_changed()
@@ -739,7 +759,8 @@ class MainWindow(QMainWindow):
         self._source_path = ""
         self._update_title()
         for widget in (self._act_close, self._act_inspect, self._btn_inspect,
-                       self._act_generate, self._generate):
+                       self._act_generate, self._generate,
+                       self._act_print, self._btn_print):
             widget.setEnabled(False)
         self._canvas.clear_all()
         self._run_preflight()
@@ -873,6 +894,24 @@ class MainWindow(QMainWindow):
 
         self.export_to(path)
 
+    def _on_print(self):
+        if not self._source_path or not self._source_doc:
+            return
+        errors = [f for f in self._findings if f.severity == Severity.ERROR]
+        if errors:
+            if not self._is_offscreen():
+                QMessageBox.warning(
+                    self,
+                    "Preflight — Errori bloccanti",
+                    f"Impossibile procedere con la stampa: sono presenti errori di preflight bloccanti:\n\n{errors[0].message}",
+                )
+            return
+
+        from laydown.ui.print_dialog import PrintDialog
+        project = self.build_project()
+        dialog = PrintDialog(project=project, parent=self)
+        dialog.exec()
+
     def export_to(self, path: str) -> bool:
         """Export the current project to *path* atomically.
 
@@ -891,6 +930,9 @@ class MainWindow(QMainWindow):
         self._progress.setMinimumDuration(0)
         self._progress.canceled.connect(self._export.cancel)  # actually stops the work
         self._generate.setEnabled(False)
+        self._btn_print.setEnabled(False)
+        self._act_generate.setEnabled(False)
+        self._act_print.setEnabled(False)
         self._export.setup(project, path)
         self._export.start()
         return True
@@ -911,7 +953,11 @@ class MainWindow(QMainWindow):
         except RuntimeError:
             pass
         self._progress = None
-        self._generate.setEnabled(bool(self._source_path))
+        has_source = bool(self._source_path)
+        self._generate.setEnabled(has_source)
+        self._btn_print.setEnabled(has_source)
+        self._act_generate.setEnabled(has_source)
+        self._act_print.setEnabled(has_source)
 
     def _on_export_done(self, sheets, path):
         self._close_progress()
