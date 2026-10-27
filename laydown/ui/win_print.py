@@ -358,18 +358,20 @@ def merge_devmode(
             dev.dmCollate = 1 if collate else 0
 
         # 2. Patch proprietary vendor private tokens in dmDriverExtra (HP UPD, Lexmark, etc.)
-        # This prevents vendor plugins from secretly resetting paper size back to A4 in the spooler!
+        # This ensures vendor plugins synchronize with the public DEVMODE settings.
         if paper_size_id == DMPAPER_A3:
-            for old_size in [b"A4", b"Letter", b"Legal"]:
-                raw = raw.replace(b"PageSize\x00" + old_size + b"\x00", b"PageSize\x00A3\x00")
+            raw = raw.replace(b"PageSize\x00A4\x00", b"PageSize\x00A3\x00")
         elif paper_size_id == DMPAPER_A4:
-            for old_size in [b"A3", b"Letter", b"Legal"]:
-                raw = raw.replace(b"PageSize\x00" + old_size + b"\x00", b"PageSize\x00A4\x00")
+            raw = raw.replace(b"PageSize\x00A3\x00", b"PageSize\x00A4\x00")
 
         if orientation == DMORIENT_LANDSCAPE:
             raw = raw.replace(b"HPOrientation\x00HPOrientationPortrait\x00", b"HPOrientation\x00HPOrientationLandscape\x00")
         elif orientation == DMORIENT_PORTRAIT:
             raw = raw.replace(b"HPOrientation\x00HPOrientationLandscape\x00", b"HPOrientation\x00HPOrientationPortrait\x00")
+
+        # 3. Synchronize dmDriverExtra header length with the buffer
+        dev = DEVMODEW.from_buffer(raw)
+        dev.dmDriverExtra = len(raw) - dev.dmSize
 
         return bytes(raw)
 
@@ -482,13 +484,6 @@ def print_pdf_direct_gdi(
             if user32:
                 gdi32.SetBrushOrgEx(hdc, 0, 0, None)
 
-            # Check if printer driver supports PostScript passthrough
-            POSTSCRIPT_PASSTHROUGH = 4115
-            esc_in = wintypes.INT(POSTSCRIPT_PASSTHROUGH)
-            has_ps_passthrough = bool(
-                gdi32.ExtEscape(hdc, 8, ctypes.sizeof(esc_in), ctypes.byref(esc_in), 0, None) > 0
-            )
-
             docinfo = DOCINFOW()
             docinfo.cbSize = ctypes.sizeof(DOCINFOW)
             docinfo.lpszDocName = doc_name
@@ -573,15 +568,6 @@ def print_pdf_direct_gdi(
                 bmi.biSizeImage = qimg.sizeInBytes()
 
                 gdi32.StartPage(hdc)
-                if has_ps_passthrough:
-                    # In PostScript drivers, force target PageSize on the device before rasterizing
-                    ps_code = f"<< /PageSize [{paper_w_pt:.2f} {paper_h_pt:.2f}] /DeferredMediaSelection true >> setpagedevice\n".encode("ascii")
-                    w_len = wintypes.WORD(len(ps_code))
-                    payload = ctypes.create_string_buffer(2 + len(ps_code))
-                    ctypes.memmove(payload, ctypes.byref(w_len), 2)
-                    ctypes.memmove(ctypes.byref(payload, 2), ps_code, len(ps_code))
-                    gdi32.ExtEscape(hdc, POSTSCRIPT_PASSTHROUGH, len(payload), payload, 0, None)
-
                 gdi32.StretchDIBits(
                     hdc,
                     dest_x, dest_y, dest_w, dest_h,
