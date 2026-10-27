@@ -128,6 +128,78 @@ def compute_sheet_placement(
     return (target_w, target_h, offset_x, offset_y)
 
 
+def find_best_matching_paper_size(
+    supported_sizes: List[QPageSize],
+    sheet_w_mm: float,
+    sheet_h_mm: float,
+    preset: str = "",
+) -> int:
+    """
+    Find the index of the best matching paper size from supported sizes.
+
+    Prioritizes:
+    1. Exact PageSizeId matching the imposition preset (e.g. A3 -> PageSizeId.A3).
+    2. Name matching the preset (e.g. 'A3' in s.name()).
+    3. Exact dimension match within 3 mm in either orientation.
+    4. Proportional fit: if the sheet is large (A3, SRA3, etc.) but the printer only supports
+       up to A4, selects standard A4 rather than Legal or Letter.
+    """
+    if not supported_sizes:
+        return 0
+
+    preset_upper = (preset or "").upper().strip()
+
+    # 1. Exact preset ID / standard enum match
+    if preset_upper == "A3":
+        for idx, s in enumerate(supported_sizes):
+            if s.id() == QPageSize.PageSizeId.A3 or s.name().strip().upper() == "A3":
+                return idx
+    elif preset_upper == "A4":
+        for idx, s in enumerate(supported_sizes):
+            if s.id() == QPageSize.PageSizeId.A4 or s.name().strip().upper() == "A4":
+                return idx
+    elif preset_upper == "SRA3":
+        for idx, s in enumerate(supported_sizes):
+            if "SRA3" in s.name().upper():
+                return idx
+        # Fallback for SRA3: if printer supports A3, pick A3
+        for idx, s in enumerate(supported_sizes):
+            if s.id() == QPageSize.PageSizeId.A3 or s.name().strip().upper() == "A3":
+                return idx
+
+    # 2. Exact dimension match within 3 mm (either orientation)
+    for idx, s in enumerate(supported_sizes):
+        sz = s.size(QPageSize.Unit.Millimeter)
+        if (abs(sz.width() - sheet_w_mm) < 3.0 and abs(sz.height() - sheet_h_mm) < 3.0) or \
+           (abs(sz.width() - sheet_h_mm) < 3.0 and abs(sz.height() - sheet_w_mm) < 3.0):
+            return idx
+
+    # 3. If the imposed sheet is large (A3, SRA3, etc.) but the printer only supports up to A4:
+    # Prefer standard A4 rather than Legal/Letter!
+    max_dim = max(sheet_w_mm, sheet_h_mm)
+    if max_dim >= 400.0:
+        for idx, s in enumerate(supported_sizes):
+            if s.id() == QPageSize.PageSizeId.A3 or s.name().strip().upper() == "A3":
+                return idx
+        for idx, s in enumerate(supported_sizes):
+            if s.id() == QPageSize.PageSizeId.A4 or s.name().strip().upper() == "A4":
+                return idx
+
+    # 4. Fallback minimum difference
+    best_diff = float("inf")
+    best_idx = 0
+    for idx, s in enumerate(supported_sizes):
+        sz = s.size(QPageSize.Unit.Millimeter)
+        diff = min(
+            abs(sz.width() - sheet_w_mm) + abs(sz.height() - sheet_h_mm),
+            abs(sz.width() - sheet_h_mm) + abs(sz.height() - sheet_w_mm),
+        )
+        if diff < best_diff:
+            best_diff = diff
+            best_idx = idx
+    return best_idx
+
+
 # ── Background Print Spooler Worker ────────────────────────
 
 class _PrintWorker(QThread):
@@ -143,6 +215,8 @@ class _PrintWorker(QThread):
         scaling_mode: str,
         center: bool,
         resolution: int,
+        page_size: Optional[QPageSize] = None,
+        orientation: Optional[QPageLayout.Orientation] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -152,6 +226,8 @@ class _PrintWorker(QThread):
         self._scaling_mode = scaling_mode
         self._center = center
         self._resolution = resolution
+        self._page_size = page_size
+        self._orientation = orientation
         self._cancel = False
 
     def cancel(self):
@@ -162,6 +238,10 @@ class _PrintWorker(QThread):
         try:
             doc = fitz.open(self._pdf_path)
             self._printer.setResolution(self._resolution)
+            if self._page_size is not None:
+                self._printer.setPageSize(self._page_size)
+            if self._orientation is not None:
+                self._printer.setPageOrientation(self._orientation)
             self._printer.setFullPage(True)
 
             painter = QPainter(self._printer)
@@ -286,6 +366,8 @@ class PrintDialog(QDialog):
 
         self._show_printable_margins = True
         self._current_sheet_indices: List[int] = list(range(self._total_sheets))
+        self._preset = getattr(getattr(self._project, "sheet", None), "preset", "A3")
+        self._last_was_draft = False
 
         self.setWindowTitle("Stampa — Laydown")
         self.resize(1120, 760)
@@ -418,16 +500,28 @@ class PrintDialog(QDialog):
 
         bb_layout.addStretch(1)
 
-        self._btn_cancel = QPushButton("Annulla")
+        self._btn_cancel = QPushButton("Chiudi")
         self._btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_cancel.clicked.connect(self._on_cancel_or_close)
         bb_layout.addWidget(self._btn_cancel)
 
-        self._btn_print = QPushButton("  Invia in Stampa")
+        self._btn_print_draft = QPushButton("  ⚡ Bozza Veloce (150 DPI)")
+        self._btn_print_draft.setIcon(lucide("print", 16, t.FG))
+        self._btn_print_draft.setToolTip(
+            "Stampa rapida di prova a 150 DPI per verificare impostazioni, margini e piega in 1-2 secondi"
+        )
+        self._btn_print_draft.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_print_draft.clicked.connect(lambda: self._on_start_print(draft=True))
+        bb_layout.addWidget(self._btn_print_draft)
+
+        self._btn_print = QPushButton("  🖨️ Stampa Alta Definizione")
         self._btn_print.setIcon(lucide("print", 18, t.ACCENT_FG))
         self._btn_print.setProperty("accent", True)
+        self._btn_print.setToolTip(
+            "Stampa finale di produzione ad alta definizione (600 DPI / 1200 DPI)"
+        )
         self._btn_print.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_print.clicked.connect(self._on_start_print)
+        self._btn_print.clicked.connect(lambda: self._on_start_print(draft=False))
         bb_layout.addWidget(self._btn_print)
 
         root.addWidget(bottom_bar)
@@ -567,7 +661,7 @@ class PrintDialog(QDialog):
         scale_card, s_layout = self._create_section_card("Scala e Geometria")
         self._combo_scale = QComboBox()
         self._combo_scale.addItem("100% — Dimensioni reali (Consigliato)", "actual")
-        self._combo_scale.addItem("Adatta all'area stampabile", "fit")
+        self._combo_scale.addItem("Adatta al foglio di stampa (Bozza)", "fit")
         self._combo_scale.addItem("Riduci se sovradimensionato", "shrink")
         self._combo_scale.currentIndexChanged.connect(self._on_scale_mode_changed)
         s_layout.addWidget(self._combo_scale)
@@ -586,12 +680,12 @@ class PrintDialog(QDialog):
         wf_layout = QVBoxLayout(self._warning_frame)
         wf_layout.setContentsMargins(6, 4, 6, 4)
         wf_layout.setSpacing(2)
-        wf_title = QLabel("Avviso margini fisici")
-        wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+        self._wf_title = QLabel("Avviso margini fisici")
+        self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
         self._wf_text = QLabel("Il foglio imposto eccede l'area stampabile della carta selezionata.")
         self._wf_text.setWordWrap(True)
         self._wf_text.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_2XS}px;")
-        wf_layout.addWidget(wf_title)
+        wf_layout.addWidget(self._wf_title)
         wf_layout.addWidget(self._wf_text)
         s_layout.addWidget(self._warning_frame)
         self._warning_frame.setVisible(False)
@@ -726,34 +820,42 @@ class PrintDialog(QDialog):
         supported_sizes = info.supportedPageSizes() if not info.isNull() else []
 
         selected_idx = 0
-        best_diff = float("inf")
-
         if supported_sizes:
+            selected_idx = find_best_matching_paper_size(
+                supported_sizes,
+                self._sheet_w_mm,
+                self._sheet_h_mm,
+                self._preset,
+            )
             for idx, s in enumerate(supported_sizes):
                 sz = s.size(QPageSize.Unit.Millimeter)
                 label = f"{s.name()} ({sz.width():.0f} × {sz.height():.0f} mm)"
                 self._combo_paper.addItem(label, s)
-
-                # Match with sheet size (accounting for portrait or landscape)
-                diff = min(
-                    abs(sz.width() - self._sheet_w_mm) + abs(sz.height() - self._sheet_h_mm),
-                    abs(sz.width() - self._sheet_h_mm) + abs(sz.height() - self._sheet_w_mm),
-                )
-                if diff < best_diff:
-                    best_diff = diff
-                    selected_idx = idx
         else:
             # Fallback standard ISO / US sizes
             for s_id in [QPageSize.PageSizeId.A4, QPageSize.PageSizeId.A3, QPageSize.PageSizeId.Letter]:
                 ps = QPageSize(s_id)
                 sz = ps.size(QPageSize.Unit.Millimeter)
                 self._combo_paper.addItem(f"{ps.name()} ({sz.width():.0f} × {sz.height():.0f} mm)", ps)
+            if self._preset.upper() == "A3":
+                selected_idx = 1
 
         if self._combo_paper.count() > 0:
             self._combo_paper.setCurrentIndex(selected_idx)
             chosen_size = self._combo_paper.itemData(selected_idx)
             if chosen_size:
                 self._printer.setPageSize(chosen_size)
+                # Smart scale selection: if sheet is larger than the paper,
+                # default to 'fit' (bozza proporzionale), otherwise 'actual' (100% 1:1)
+                ch_sz = chosen_size.size(QPageSize.Unit.Millimeter)
+                if self._sheet_w_mm > 350.0 and (ch_sz.width() < 350.0 and ch_sz.height() < 350.0):
+                    fit_idx = self._combo_scale.findData("fit")
+                    if fit_idx >= 0:
+                        self._combo_scale.setCurrentIndex(fit_idx)
+                else:
+                    act_idx = self._combo_scale.findData("actual")
+                    if act_idx >= 0:
+                        self._combo_scale.setCurrentIndex(act_idx)
 
         self._combo_paper.blockSignals(False)
         self._update_orientation()
@@ -844,11 +946,14 @@ class PrintDialog(QDialog):
             elif mode_id == 2:  # Custom range
                 text = self._range_edit.text()
                 self._current_sheet_indices = parse_page_range(text, self._total_sheets)
-            self._btn_print.setEnabled(len(self._current_sheet_indices) > 0 and len(self._available_printers) > 0)
+            can_print = len(self._current_sheet_indices) > 0 and len(self._available_printers) > 0
+            self._btn_print.setEnabled(can_print)
+            self._btn_print_draft.setEnabled(can_print)
             self._preview.updatePreview()
         except ValueError:
             self._range_edit.setStyleSheet(f"border: 1px solid {t.DESTRUCTIVE};")
             self._btn_print.setEnabled(False)
+            self._btn_print_draft.setEnabled(False)
 
     # ── Overflow Warning ──────────────────────────────────────
 
@@ -865,13 +970,54 @@ class PrintDialog(QDialog):
         overflows_paper = (self._sheet_w_pt > paper_w_pt + 1.0) or (self._sheet_h_pt > paper_h_pt + 1.0)
         overflows_printable = (self._sheet_w_pt > paint_w_pt + 1.0) or (self._sheet_h_pt > paint_h_pt + 1.0)
 
-        if mode == "actual" and overflows_paper:
+        paper_name = self._combo_paper.currentText()
+        paper_is_smaller = (self._sheet_w_mm > 350.0 and paper_w_pt * 25.4 / 72.0 < 350.0)
+
+        if paper_is_smaller:
+            if mode == "fit":
+                self._wf_title.setText("Bozza ridotta su carta A4")
+                self._wf_title.setStyleSheet(f"color: #0EA5E9; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix('#0EA5E9', t.SURFACE, 0.15)};"
+                    f"border: 1px solid #0EA5E9; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+                )
+                self._wf_text.setText(
+                    f"Il foglio imposto A3 ({self._sheet_w_mm:.0f}×{self._sheet_h_mm:.0f} mm) viene ridotto al 70.7% "
+                    f"per entrare interamente nella carta {paper_name.split('(')[0].strip()} come bozza di verifica."
+                )
+                self._warning_frame.setVisible(True)
+            else:
+                self._wf_title.setText("Avviso formato carta A4")
+                self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
+                    f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+                )
+                self._wf_text.setText(
+                    f"Attenzione: il foglio imposto ({self._sheet_w_mm:.0f}×{self._sheet_h_mm:.0f} mm) è più grande "
+                    f"della carta ({paper_name.split('(')[0].strip()}). A grandezza reale (100%) verrà stampata solo "
+                    f"l'area centrale. Seleziona 'Adatta al foglio di stampa' per vedere l'intero foglio."
+                )
+                self._warning_frame.setVisible(True)
+        elif mode == "actual" and overflows_paper:
+            self._wf_title.setText("Avviso dimensioni foglio")
+            self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+            self._warning_frame.setStyleSheet(
+                f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
+                f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+            )
             self._wf_text.setText(
                 f"Il foglio imposto ({self._sheet_w_mm:.0f}×{self._sheet_h_mm:.0f} mm) supera la dimensione "
                 f"della carta ({paper_w_pt*25.4/72:.0f}×{paper_h_pt*25.4/72:.0f} mm). Parte dell'imposizione verrà tagliata."
             )
             self._warning_frame.setVisible(True)
         elif mode == "actual" and overflows_printable:
+            self._wf_title.setText("Avviso margini fisici stampante")
+            self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+            self._warning_frame.setStyleSheet(
+                f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
+                f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+            )
             self._wf_text.setText(
                 "Il foglio imposto si estende oltre i margini fisici stampabili della periferica. "
                 "Crocini o elementi al vivo potrebbero essere troncati."
@@ -981,7 +1127,7 @@ class PrintDialog(QDialog):
 
     # ── Print Execution ───────────────────────────────────────
 
-    def _on_start_print(self):
+    def _on_start_print(self, draft: bool = False):
         if not self._current_sheet_indices:
             QMessageBox.warning(self, "Attenzione", "Nessun foglio valido selezionato per la stampa.")
             return
@@ -990,17 +1136,27 @@ class PrintDialog(QDialog):
             QMessageBox.critical(self, "Errore", "Nessuna stampante rilevata sul sistema.")
             return
 
+        self._last_was_draft = draft
+
         # Prepare UI for background printing
         self._btn_print.setEnabled(False)
-        self._btn_cancel.setText("Annulla stampa")
+        self._btn_print_draft.setEnabled(False)
+        self._btn_cancel.setText("Annulla invio")
         self._progress_bar.setVisible(True)
         self._progress_bar.setValue(0)
         self._progress_bar.setMaximum(len(self._current_sheet_indices))
-        self._status_lbl.setText("Invio allo spooler in corso…")
+
+        resolution = 150 if draft else (self._combo_dpi.currentData() or 600)
+        label_mode = "bozza veloce (150 DPI)" if draft else f"alta definizione ({resolution} DPI)"
+        self._status_lbl.setText(f"Invio {label_mode} in corso…")
 
         scaling_mode = self._combo_scale.currentData()
         center = self._chk_center.isChecked()
-        resolution = self._combo_dpi.currentData() or 600
+
+        selected_page_size = self._combo_paper.currentData()
+        if selected_page_size:
+            self._printer.setPageSize(selected_page_size)
+        self._update_orientation()
 
         self._worker = _PrintWorker(
             printer=self._printer,
@@ -1009,6 +1165,8 @@ class PrintDialog(QDialog):
             scaling_mode=scaling_mode,
             center=center,
             resolution=resolution,
+            page_size=selected_page_size,
+            orientation=self._printer.pageLayout().orientation(),
             parent=self,
         )
         self._worker.progress.connect(self._on_worker_progress)
@@ -1018,20 +1176,25 @@ class PrintDialog(QDialog):
 
     def _on_worker_progress(self, current: int, total: int):
         self._progress_bar.setValue(current)
-        self._status_lbl.setText(f"Spooling foglio {current} di {total}…")
+        mode_str = "Bozza" if self._last_was_draft else "Produzione"
+        self._status_lbl.setText(f"Spooling {mode_str}: foglio {current} di {total}…")
 
     def _on_worker_finished(self):
-        self._status_lbl.setText("Stampa inviata con successo allo spooler.")
-        QMessageBox.information(
-            self,
-            "Stampa completata",
-            f"Il lavoro ({len(self._current_sheet_indices)} fogli) è stato inviato correttamente alla stampante.",
+        self._progress_bar.setVisible(False)
+        self._btn_print.setEnabled(True)
+        self._btn_print_draft.setEnabled(True)
+        self._btn_cancel.setText("Chiudi")
+        total = len(self._current_sheet_indices)
+        mode_str = "Bozza veloce" if self._last_was_draft else "Alta definizione"
+        self._status_lbl.setText(
+            f"✅ Stampa completata ({mode_str}): {total} fogli{'o' if total == 1 else ''} inviati allo spooler."
         )
-        self.accept()
+        # Il dialog rimane aperto come richiesto: l'utente chiuderà manualmente la finestra
 
     def _on_worker_error(self, err_msg: str):
         self._btn_print.setEnabled(True)
-        self._btn_cancel.setText("Annulla")
+        self._btn_print_draft.setEnabled(True)
+        self._btn_cancel.setText("Chiudi")
         self._progress_bar.setVisible(False)
         self._status_lbl.setText("Errore durante la stampa.")
         QMessageBox.critical(self, "Errore di stampa", err_msg)

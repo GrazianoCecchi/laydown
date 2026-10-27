@@ -8,6 +8,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 - **Procedura di stampa integrata e finestra professionale di anteprima di stampa:**
   - **Modulo dedicato di stampa (`laydown/ui/print_dialog.py`):** creata una finestra di dialogo completa per la stampa di produzione (`PrintDialog`), stilizzata in modo coerente con il dark theme OKLCH dell'applicazione (`laydown.ui.theme`).
+  - **Doppia modalità di stampa: Bozza Veloce (150 DPI) e Alta Definizione (600/1200 DPI):**
+    - Aggiunto il pulsante dedicato **⚡ Bozza Veloce (150 DPI)** che rasterizza ed invia allo spooler in 1-2 secondi, permettendo all'utente di verificare rapidamente crocini, pieghe e allineamento sulla carta fisica senza attendere i tempi lunghi della stampa ad alta risoluzione.
+    - Pulsante primario **🖨️ Stampa Alta Definizione** per il lancio definitivo della produzione tipografica a 600 o 1200 DPI.
+  - **Finestra di stampa persistente (nessuna chiusura automatica indesiderata):**
+    - Eliminata la chiusura automatica modale (`accept()`) e rimosso il popup bloccante al termine dell'invio allo spooler: la finestra rimane aperta mostrando lo stato aggiornato in tempo reale (`"✅ Stampa inviata con successo allo spooler"`), consentendo all'utente di stampare una bozza, verificare i fogli, modificare le opzioni e lanciare la stampa definitiva. La chiusura avviene manualmente tramite il pulsante *"Chiudi"* o la `[X]`.
+  - **Risoluzione mismatch formato carta A3/A4 e abbinamento intelligente:**
+    - Introdotto l'algoritmo [`find_best_matching_paper_size`](file:///C:/Users/a125756/Documenti-GRA/Programmazione/Progetti_python/laydown/laydown/ui/print_dialog.py) che riconosce prioritariamente il formato A3 del progetto ed evita fallback anomali su formati come "Legale" sulle stampanti desktop che caricano A4.
+    - Selezionando una stampante che supporta solo l'A4 per un progetto A3, il sistema imposta automaticamente la modalità di bozza scalata (*"Adatta al foglio di stampa"*) con avviso visivo azzurro chiaro esplicativo, consentendo di visualizzare l'intero foglio A3 ridotto sulla carta A4 o di passare al 100% per un ritaglio a dimensione naturale. Su stampanti A3, il formato viene bloccato a grandezza naturale (1:1).
   - **Pannello di controllo prestampa unificato:**
     - **Selezione stampante:** rileva in tempo reale tutte le periferiche disponibili (`QPrinterInfo`), evidenziando la stampante predefinita e fornendo accesso diretto alle proprietà avanzate del driver di sistema.
     - **Fogli e intervallo:** supporto per stampa di tutti i fogli, foglio corrente o intervallo personalizzato con sintassi flessibile (es. `1-3, 5`), con validazione visiva istantanea.

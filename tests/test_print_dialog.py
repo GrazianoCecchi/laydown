@@ -17,9 +17,11 @@ from laydown.engine.data_model import Project
 from laydown.ui.print_dialog import (
     parse_page_range,
     compute_sheet_placement,
+    find_best_matching_paper_size,
     PrintDialog,
     _PrintWorker,
 )
+from PyQt6.QtGui import QPageSize
 
 
 @pytest.fixture(scope="module")
@@ -83,6 +85,32 @@ class TestParsePageRange:
             parse_page_range("foo", 4)
         with pytest.raises(ValueError, match="Intervallo non valido"):
             parse_page_range("1-2-3", 4)
+
+
+# ── Paper Matching Tests ───────────────────────────────────
+
+class TestFindBestMatchingPaperSize:
+    def test_exact_a3_match(self):
+        sizes = [QPageSize(QPageSize.PageSizeId.A4), QPageSize(QPageSize.PageSizeId.A3), QPageSize(QPageSize.PageSizeId.Letter)]
+        idx = find_best_matching_paper_size(sizes, 420.0, 297.0, preset="A3")
+        assert idx == 1
+        assert sizes[idx].id() == QPageSize.PageSizeId.A3
+
+    def test_a3_sheet_on_a4_only_printer_prefers_a4_over_legal(self):
+        # A4 printer with Letter, Legal, A4, Executive
+        sizes = [
+            QPageSize(QPageSize.PageSizeId.Letter),
+            QPageSize(QPageSize.PageSizeId.Legal),
+            QPageSize(QPageSize.PageSizeId.A4),
+        ]
+        # For A3 sheet (420 x 297 mm), Legal (356 x 216) must NOT be chosen over A4
+        idx = find_best_matching_paper_size(sizes, 420.0, 297.0, preset="A3")
+        assert sizes[idx].id() == QPageSize.PageSizeId.A4
+
+    def test_exact_dimension_match(self):
+        sizes = [QPageSize(QPageSize.PageSizeId.Letter), QPageSize(QPageSize.PageSizeId.A4)]
+        idx = find_best_matching_paper_size(sizes, 210.0, 297.0, preset="Custom")
+        assert sizes[idx].id() == QPageSize.PageSizeId.A4
 
 
 # ── Sheet Placement Geometry Tests ─────────────────────────
@@ -231,6 +259,28 @@ class TestPrintDialogUI:
             dlg._set_single_page_view()
             assert dlg._btn_single_view.isChecked()
             assert not dlg._btn_facing_view.isChecked()
+        finally:
+            dlg.close_document()
+            dlg.close()
+
+    def test_draft_and_production_buttons_and_dialog_stays_open(self, app, sample_project, sample_pdf):
+        dlg = PrintDialog(project=sample_project, pdf_path=sample_pdf)
+        try:
+            assert hasattr(dlg, "_btn_print_draft")
+            assert hasattr(dlg, "_btn_print")
+            assert "Bozza" in dlg._btn_print_draft.text()
+            assert "Alta Definizione" in dlg._btn_print.text()
+
+            # Simulate completion of worker
+            dlg._last_was_draft = True
+            dlg._on_worker_finished()
+
+            # Dialog must stay open (isVisible/not rejected or accepted)
+            assert dlg._btn_cancel.text() == "Chiudi"
+            assert "✅" in dlg._status_lbl.text()
+            assert "Bozza veloce" in dlg._status_lbl.text()
+            assert dlg._btn_print.isEnabled()
+            assert dlg._btn_print_draft.isEnabled()
         finally:
             dlg.close_document()
             dlg.close()
