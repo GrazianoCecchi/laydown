@@ -186,3 +186,31 @@ class TestPresetDefaults:
         store.load(load_preset(preset_file))
         assert store.get("sheet.preset") == "A2"
         assert store.get("layout.nup") == 2
+
+
+class TestPrintableMarginsAction:
+    def test_printable_margins_action_and_button_sync(self, app):
+        win = MainWindow()
+        win.show()
+        try:
+            assert hasattr(win, "_act_margins")
+            assert hasattr(win, "_btn_margins")
+
+            # Toggle on via menu action
+            win._act_margins.setChecked(True)
+            assert win._btn_margins.isChecked() is True
+            assert win._canvas._show_printable_margins is True
+            assert win._canvas._printable_margins_pt is not None
+            assert len(win._canvas._printable_margins_pt) == 4
+
+            # Toggle off via toolbar button
+            win._btn_margins.setChecked(False)
+            assert win._act_margins.isChecked() is False
+            assert win._canvas._show_printable_margins is False
+
+            # Check _get_printer_margins_pt returns 4 non-negative floats
+            margins = win._get_printer_margins_pt()
+            assert len(margins) == 4
+            assert all(m >= 0.0 for m in margins)
+        finally:
+            win.close()

@@ -265,6 +265,7 @@ class MainWindow(QMainWindow):
         self._load_recent()
         self._build_menubar()
         self._build_main_area()
+        self._restore_view_settings()
         self._on_values_changed()
 
     # ── title ────────────────────────────────────
@@ -361,6 +362,12 @@ class MainWindow(QMainWindow):
             action.toggled.connect(self._on_view_toggle)
             view_menu.addAction(action)
 
+        view_menu.addSeparator()
+        self._act_margins = QAction("Mostra area stampabile &periferica", self, checkable=True,
+                                    shortcut="Alt+5")
+        self._act_margins.toggled.connect(self._on_margins_toggle)
+        view_menu.addAction(self._act_margins)
+
         help_menu = bar.addMenu("&Aiuto")
         help_menu.addAction(QAction(mi("tutorials"), "&Guida e tutorial", self, shortcut="F1",
                                     triggered=self._on_tutorials))
@@ -423,6 +430,14 @@ class MainWindow(QMainWindow):
         self._btn_inspect.setEnabled(False)
         self._btn_inspect.clicked.connect(self._on_inspect_pdf)
         row.addWidget(self._btn_inspect)
+
+        self._btn_margins = _tool_btn(
+            lucide("print"),
+            "Mostra area stampabile della periferica (Alt+5)",
+            checkable=True,
+        )
+        self._btn_margins.toggled.connect(self._on_margins_toggle)
+        row.addWidget(self._btn_margins)
 
         row.addStretch(1)
         for glyph, tip, slot in (
@@ -666,6 +681,8 @@ class MainWindow(QMainWindow):
         self._act_redo.setEnabled(self._store.can_redo())
         self._run_preflight()
         if self._source_path:
+            if getattr(self, "_act_margins", None) and self._act_margins.isChecked():
+                self._canvas.set_printable_margins(True, self._get_printer_margins_pt())
             self._canvas.update_project(self.build_project())
 
     def _undo(self):
@@ -682,6 +699,63 @@ class MainWindow(QMainWindow):
         self._store.set_unit(unit)
         self._settings.setValue("display_unit", unit.name)
         self._status.showMessage(f"Lunghezze visualizzate in {unit.value}")
+
+    def _restore_view_settings(self):
+        show_margins = self._settings.value("view/show_printable_margins", False, type=bool)
+        if show_margins:
+            self._act_margins.setChecked(True)
+            self._btn_margins.setChecked(True)
+            self._canvas.set_printable_margins(True, self._get_printer_margins_pt())
+
+    def _get_printer_margins_pt(self) -> tuple[float, float, float, float]:
+        """Return (left, top, right, bottom) hardware unprintable margins in points."""
+        try:
+            from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo
+            printer_name = self._settings.value("print/last_printer", "")
+            target_info = None
+            if printer_name:
+                for p in QPrinterInfo.availablePrinters():
+                    if p.printerName() == printer_name:
+                        target_info = p
+                        break
+            if not target_info:
+                target_info = QPrinterInfo.defaultPrinter()
+            if target_info and not target_info.isNull():
+                printer = QPrinter(target_info)
+                layout = printer.pageLayout()
+                full = layout.fullRectPoints()
+                paint = layout.paintRectPoints()
+                m_left = max(0.0, float(paint.left() - full.left()))
+                m_top = max(0.0, float(paint.top() - full.top()))
+                m_right = max(0.0, float(full.right() - paint.right()))
+                m_bottom = max(0.0, float(full.bottom() - paint.bottom()))
+                return (m_left, m_top, m_right, m_bottom)
+        except Exception as exc:
+            _LOG.debug("Could not determine printer margins: %s", exc)
+        # Fallback: 4.0 mm = ~11.34 pt
+        fallback_pt = 4.0 * 72.0 / 25.4
+        return (fallback_pt, fallback_pt, fallback_pt, fallback_pt)
+
+    def _on_margins_toggle(self, checked: bool):
+        if hasattr(self, "_act_margins") and self._act_margins.isChecked() != checked:
+            self._act_margins.blockSignals(True)
+            self._act_margins.setChecked(checked)
+            self._act_margins.blockSignals(False)
+        if hasattr(self, "_btn_margins") and self._btn_margins.isChecked() != checked:
+            self._btn_margins.blockSignals(True)
+            self._btn_margins.setChecked(checked)
+            self._btn_margins.blockSignals(False)
+
+        self._settings.setValue("view/show_printable_margins", checked)
+        margins = self._get_printer_margins_pt() if checked else None
+        self._canvas.set_printable_margins(checked, margins)
+        if checked and margins:
+            m_l, m_t, m_r, m_b = margins
+            self._status.showMessage(
+                f"Area stampabile periferica attiva (margini: {m_l*25.4/72:.1f}mm SX, {m_t*25.4/72:.1f}mm ALTO, {m_r*25.4/72:.1f}mm DX, {m_b*25.4/72:.1f}mm BASSO)"
+            )
+        else:
+            self._status.showMessage("Area stampabile periferica nascosta")
 
     def _on_view_toggle(self, _=None):
         self._canvas.set_overlays(
@@ -911,6 +985,8 @@ class MainWindow(QMainWindow):
         project = self.build_project()
         dialog = PrintDialog(project=project, parent=self)
         dialog.exec()
+        if getattr(self, "_act_margins", None) and self._act_margins.isChecked():
+            self._canvas.set_printable_margins(True, self._get_printer_margins_pt())
 
     def export_to(self, path: str) -> bool:
         """Export the current project to *path* atomically.

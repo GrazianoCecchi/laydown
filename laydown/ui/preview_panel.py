@@ -7,7 +7,7 @@ Supports 1/2/4-column layout, zoom, fit-to-width/page, and overlays.
 
 import math
 import os
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from dataclasses import dataclass
 
 from PyQt6.QtWidgets import (
@@ -109,53 +109,83 @@ def cells_from_result(result: ImposeResult, sheet_idx: int) -> List[CellInfo]:
 def draw_overlays(
     image: QImage, cells: List[CellInfo], scale: float,
     show_tops: bool, show_numbers: bool, show_frames: bool, show_previews: bool,
+    printable_margins: Optional[Tuple[float, float, float, float]] = None,
 ) -> QImage:
     """Paint overlay marks onto a QImage.
 
     QImage (not QPixmap) on purpose: this runs in the render thread, and Qt
     only allows QPixmap operations on the GUI thread.
     """
-    if not cells:
-        return image
     painter = QPainter(image)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    for c in cells:
-        px0, py0 = c.x0 * scale, c.y0 * scale
-        pw, ph = (c.x1 - c.x0) * scale, (c.y1 - c.y0) * scale
-        rect = QRectF(px0, py0, pw, ph)
+    # 1. Printable boundary & shaded unprintable strips
+    if printable_margins:
+        m_left_pt, m_top_pt, m_right_pt, m_bottom_pt = printable_margins
+        img_w = float(image.width())
+        img_h = float(image.height())
 
-        if not show_previews:
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(245, 245, 245))
-            painter.drawRect(rect)
+        mx0 = m_left_pt * scale
+        my0 = m_top_pt * scale
+        mx1 = img_w - (m_right_pt * scale)
+        my1 = img_h - (m_bottom_pt * scale)
+        mw = max(0.0, mx1 - mx0)
+        mh = max(0.0, my1 - my0)
 
-        if show_frames and c.page_num > 0:
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            pen = QPen(MAGENTA, max(1.0, scale * 0.5))
-            if c.is_placeholder:
-                pen.setStyle(Qt.PenStyle.DashLine)
-            painter.setPen(pen)
-            painter.drawRect(rect)
+        # Soft shaded strips on the 4 unprintable edges
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(239, 68, 68, 25))
+        if my0 > 0:
+            painter.drawRect(QRectF(0, 0, img_w, my0))
+        if my1 < img_h:
+            painter.drawRect(QRectF(0, my1, img_w, img_h - my1))
+        if mx0 > 0:
+            painter.drawRect(QRectF(0, my0, mx0, mh))
+        if mx1 < img_w:
+            painter.drawRect(QRectF(mx1, my0, img_w - mx1, mh))
 
-        if show_tops and c.page_num > 0:
-            pen = QPen(MAGENTA, max(1.5, scale * 0.7))
-            if c.is_placeholder:
-                pen.setStyle(Qt.PenStyle.DashLine)
-            painter.setPen(pen)
-            painter.drawLine(QPointF(px0, py0), QPointF(px0 + pw, py0))
-            cx = px0 + pw / 2
-            painter.drawLine(QPointF(cx, py0), QPointF(cx, py0 + min(20 * scale / 1.5, ph * 0.06)))
+        # Dashed line around the printable boundary
+        pen = QPen(QColor(239, 68, 68, 200), max(1.5, scale * 0.4), Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(QRectF(mx0, my0, mw, mh))
 
-        if show_numbers and c.page_num > 0:
-            # Bigger and regular weight (not bold) — the numbers should read clearly
-            # without shouting.
-            fs = max(22, int(min(pw, ph) * 0.28))
-            f = QFont(t.FONT_FAMILY, fs)
-            painter.setFont(f)
-            painter.setPen(MAGENTA)
-            label = f"{c.page_num}*" if c.is_placeholder else str(c.page_num)
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+    # 2. Imposition cells
+    if cells:
+        for c in cells:
+            px0, py0 = c.x0 * scale, c.y0 * scale
+            pw, ph = (c.x1 - c.x0) * scale, (c.y1 - c.y0) * scale
+            rect = QRectF(px0, py0, pw, ph)
+
+            if not show_previews:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(245, 245, 245))
+                painter.drawRect(rect)
+
+            if show_frames and c.page_num > 0:
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                pen = QPen(MAGENTA, max(1.0, scale * 0.5))
+                if c.is_placeholder:
+                    pen.setStyle(Qt.PenStyle.DashLine)
+                painter.setPen(pen)
+                painter.drawRect(rect)
+
+            if show_tops and c.page_num > 0:
+                pen = QPen(MAGENTA, max(1.5, scale * 0.7))
+                if c.is_placeholder:
+                    pen.setStyle(Qt.PenStyle.DashLine)
+                painter.setPen(pen)
+                painter.drawLine(QPointF(px0, py0), QPointF(px0 + pw, py0))
+                cx = px0 + pw / 2
+                painter.drawLine(QPointF(cx, py0), QPointF(cx, py0 + min(20 * scale / 1.5, ph * 0.06)))
+
+            if show_numbers and c.page_num > 0:
+                fs = max(22, int(min(pw, ph) * 0.28))
+                f = QFont(t.FONT_FAMILY, fs)
+                painter.setFont(f)
+                painter.setPen(MAGENTA)
+                label = f"{c.page_num}*" if c.is_placeholder else str(c.page_num)
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 
     painter.end()
     return image
@@ -180,7 +210,7 @@ class _RenderWorker(QThread):
     done = pyqtSignal(list, int, int)  # List[QImage], render DPI, generation
     error = pyqtSignal(str, int)      # message, generation
 
-    def __init__(self, project, target_dpi, overlays, generation, parent=None):
+    def __init__(self, project, target_dpi, overlays, generation, printable_margins=None, parent=None):
         super().__init__(parent)
         self.project: Project = project
         # The DPI worth rendering at (zoom-driven). The real DPI used is
@@ -190,6 +220,7 @@ class _RenderWorker(QThread):
         self.target_dpi: int = target_dpi
         self.show_tops, self.show_numbers, self.show_frames, self.show_previews = overlays
         self.generation = generation
+        self.printable_margins = printable_margins
         self._cancel = False
 
     def cancel(self):
@@ -225,7 +256,8 @@ class _RenderWorker(QThread):
                 cells = cells_from_result(result, i)
                 img = draw_overlays(img, cells, scale,
                                     self.show_tops, self.show_numbers,
-                                    self.show_frames, self.show_previews)
+                                    self.show_frames, self.show_previews,
+                                    printable_margins=self.printable_margins)
                 images.append(img)
 
             doc.close()
@@ -265,6 +297,8 @@ class SheetCanvas(QScrollArea):
         self._show_numbers = True
         self._show_frames = True
         self._show_previews = True
+        self._show_printable_margins = False
+        self._printable_margins_pt: Optional[Tuple[float, float, float, float]] = None
 
         # One worker per render. _worker is the newest; _workers holds every
         # in-flight one so clear_all/cleanup can cancel and join them.
@@ -343,6 +377,12 @@ class SheetCanvas(QScrollArea):
         if self._project:
             self._debounce.start()
 
+    def set_printable_margins(self, show: bool, margins_pt: Optional[Tuple[float, float, float, float]] = None):
+        self._show_printable_margins = show
+        self._printable_margins_pt = margins_pt
+        if self._project:
+            self._debounce.start()
+
     def clear_all(self):
         # Used on close/reset, so waiting here is fine (it is NOT fine in
         # _do_render — see there).
@@ -386,12 +426,7 @@ class SheetCanvas(QScrollArea):
     def fit_page(self):
         if not self._pixmaps:
             return
-        vp = self.viewport()
-        avail_w = (vp.width() - 60) / self._columns
-        avail_h = vp.height() - 70
-        sheet_w, sheet_h = self._sheet_size_pt()
-        self._apply_zoom(min(avail_w / sheet_w if sheet_w else 1,
-                             avail_h / sheet_h if sheet_h else 1))
+        self._fit_initial()
 
     def actual_size(self):
         try:
@@ -449,6 +484,7 @@ class SheetCanvas(QScrollArea):
             (self._show_tops, self._show_numbers, self._show_frames,
              self._show_previews),
             self._generation,
+            printable_margins=self._printable_margins_pt if self._show_printable_margins else None,
         )
         worker.done.connect(self._on_done)
         worker.error.connect(self._on_error)
@@ -481,11 +517,35 @@ class SheetCanvas(QScrollArea):
         self._render_dpi = render_dpi
         # QPixmap belongs on the GUI thread; the worker handed us QImages.
         self._pixmaps = [QPixmap.fromImage(img) for img in images]
+        self._rebuild_display()
         if self._zoom <= 0:
-            self._rebuild_display()
-            QTimer.singleShot(50, self.fit_width)
+            QTimer.singleShot(60, self._fit_initial)
+
+    def _fit_initial(self):
+        if not self._pixmaps:
+            return
+        vp = self.viewport()
+        if vp.width() <= 50 or vp.height() <= 50:
+            return
+        sheet_w, sheet_h = self._sheet_size_pt()
+        if sheet_w <= 0 or sheet_h <= 0:
+            return
+
+        # If 1 sheet or 1 column, fit page comfortably in full viewport
+        if len(self._pixmaps) == 1:
+            avail_w = vp.width() - 40
+            avail_h = vp.height() - 60
+            self._apply_zoom(min(avail_w / sheet_w, avail_h / sheet_h))
         else:
-            self._rebuild_display()
+            avail_w = (vp.width() - 60) / self._columns
+            avail_h = vp.height() - 70
+            self._apply_zoom(min(avail_w / sheet_w, avail_h / sheet_h))
+        self._zoom = 0.0  # Keep 0.0 so auto-fit mode stays active across window resizing
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._zoom <= 0 and self._pixmaps:
+            self._fit_initial()
 
     def _on_error(self, msg: str, generation: int):
         if generation != self._generation:

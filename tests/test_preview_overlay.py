@@ -105,3 +105,21 @@ class TestOverlayMatchesOutput:
             assert cells_from_result(result, 99) == []
         finally:
             os.unlink(path)
+
+    def test_draw_overlays_with_printable_margins(self):
+        from PyQt6.QtGui import QImage
+        from laydown.ui.preview_panel import draw_overlays
+        img = QImage(800, 600, QImage.Format.Format_RGB888)
+        img.fill(0xFFFFFF)
+        out = draw_overlays(
+            image=img,
+            cells=[],
+            scale=1.0,
+            show_tops=True,
+            show_numbers=True,
+            show_frames=True,
+            show_previews=True,
+            printable_margins=(15.0, 20.0, 15.0, 20.0),
+        )
+        assert out is not None
+        assert not out.isNull()

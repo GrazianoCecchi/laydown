@@ -19,7 +19,7 @@ import tempfile
 from typing import List, Optional, Tuple
 
 import fitz
-from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QPointF, QRectF, QSettings, QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor, QFont, QIcon, QImage, QPageLayout, QPageSize, QPainter, QPen,
 )
@@ -378,11 +378,17 @@ class PrintDialog(QDialog):
         self._printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         self._printer.setFullPage(True)
 
+        # Settings persistence
+        self._settings = QSettings("Laydown", "Laydown")
+        saved_printer = self._settings.value("print/last_printer", "")
+        self._show_printable_margins = self._settings.value("print/show_margins", True, type=bool)
+
         # Detect printers
         self._available_printers = QPrinterInfo.availablePrinters()
         default_name = QPrinterInfo.defaultPrinterName()
-        if default_name:
-            self._printer.setPrinterName(default_name)
+        target_name = saved_printer if any(p.printerName() == saved_printer for p in self._available_printers) else default_name
+        if target_name:
+            self._printer.setPrinterName(target_name)
 
         # Set default orientation based on imposed sheet aspect ratio
         if self._sheet_w_pt > self._sheet_h_pt:
@@ -390,11 +396,17 @@ class PrintDialog(QDialog):
         else:
             self._printer.setPageOrientation(QPageLayout.Orientation.Portrait)
 
-        # Set default duplex (booklets or jobs with >= 2 sheets default to DuplexLongSide)
-        if self._total_sheets > 1:
+        # Set default duplex (from settings, or booklets/jobs with >= 2 sheets default to DuplexLongSide)
+        saved_duplex = self._settings.value("print/duplex", None)
+        if saved_duplex is not None:
+            try:
+                self._printer.setDuplex(QPrinter.DuplexMode(int(saved_duplex)))
+            except Exception:
+                if self._total_sheets > 1:
+                    self._printer.setDuplex(QPrinter.DuplexMode.DuplexLongSide)
+        elif self._total_sheets > 1:
             self._printer.setDuplex(QPrinter.DuplexMode.DuplexLongSide)
 
-        self._show_printable_margins = True
         self._current_sheet_indices: List[int] = list(range(self._total_sheets))
         self._preset = getattr(getattr(self._project, "sheet", None), "preset", "A3")
         self._last_was_draft = False
@@ -587,12 +599,14 @@ class PrintDialog(QDialog):
         self._combo_printers.setCursor(Qt.CursorShape.PointingHandCursor)
         if self._available_printers:
             default_name = QPrinterInfo.defaultPrinterName()
+            saved_printer = self._settings.value("print/last_printer", "")
+            target_name = saved_printer if any(p.printerName() == saved_printer for p in self._available_printers) else default_name
             for p_info in self._available_printers:
                 name = p_info.printerName()
                 label = f"{name} (Predefinita)" if name == default_name else name
                 self._combo_printers.addItem(label, name)
-            # Select matching default printer
-            idx = self._combo_printers.findData(default_name)
+            # Select matching default/saved printer
+            idx = self._combo_printers.findData(target_name)
             if idx >= 0:
                 self._combo_printers.setCurrentIndex(idx)
         else:
@@ -660,7 +674,19 @@ class PrintDialog(QDialog):
         self._combo_duplex.addItem("Solo fronte (Simplex)", QPrinter.DuplexMode.DuplexNone)
         self._combo_duplex.addItem("Fronte/retro — Lato lungo", QPrinter.DuplexMode.DuplexLongSide)
         self._combo_duplex.addItem("Fronte/retro — Lato corto", QPrinter.DuplexMode.DuplexShortSide)
-        if self._total_sheets > 1:
+        saved_duplex = self._settings.value("print/duplex", None)
+        if saved_duplex is not None:
+            try:
+                target_mode = QPrinter.DuplexMode(int(saved_duplex))
+                d_idx = self._combo_duplex.findData(target_mode)
+                if d_idx >= 0:
+                    self._combo_duplex.setCurrentIndex(d_idx)
+                elif self._total_sheets > 1:
+                    self._combo_duplex.setCurrentIndex(1)
+            except Exception:
+                if self._total_sheets > 1:
+                    self._combo_duplex.setCurrentIndex(1)
+        elif self._total_sheets > 1:
             self._combo_duplex.setCurrentIndex(1)
         else:
             self._combo_duplex.setCurrentIndex(0)
@@ -697,12 +723,17 @@ class PrintDialog(QDialog):
         self._combo_scale.addItem("100% — Dimensioni reali (Consigliato)", "actual")
         self._combo_scale.addItem("Adatta al foglio di stampa (Bozza)", "fit")
         self._combo_scale.addItem("Riduci se sovradimensionato", "shrink")
+        saved_scale = self._settings.value("print/scaling_mode", "")
+        if saved_scale:
+            s_idx = self._combo_scale.findData(saved_scale)
+            if s_idx >= 0:
+                self._combo_scale.setCurrentIndex(s_idx)
         self._combo_scale.currentIndexChanged.connect(self._on_scale_mode_changed)
         s_layout.addWidget(self._combo_scale)
 
         self._chk_center = QCheckBox("Centra sul foglio")
-        self._chk_center.setChecked(True)
-        self._chk_center.toggled.connect(lambda _: self._preview.updatePreview())
+        self._chk_center.setChecked(self._settings.value("print/center", True, type=bool))
+        self._chk_center.toggled.connect(lambda _: (self._save_print_settings(), self._preview.updatePreview()))
         s_layout.addWidget(self._chk_center)
 
         # Warning card for unprintable margin overflow
@@ -734,7 +765,10 @@ class PrintDialog(QDialog):
         self._combo_dpi.addItem("300 DPI — Bozza veloce / Standard", 300)
         self._combo_dpi.addItem("600 DPI — Alta qualità (Consigliato)", 600)
         self._combo_dpi.addItem("1200 DPI — Massima definizione", 1200)
-        self._combo_dpi.setCurrentIndex(1)  # 600 DPI default
+        saved_dpi = self._settings.value("print/resolution", 600, type=int)
+        dpi_idx = self._combo_dpi.findData(saved_dpi)
+        self._combo_dpi.setCurrentIndex(dpi_idx if dpi_idx >= 0 else 1)
+        self._combo_dpi.currentIndexChanged.connect(lambda _: self._save_print_settings())
         dpi_layout.addWidget(self._combo_dpi)
         sidebar.addWidget(dpi_card)
 
@@ -830,7 +864,7 @@ class PrintDialog(QDialog):
         tb_layout.addStretch(1)
 
         self._chk_show_margins = QCheckBox("Mostra margini stampante")
-        self._chk_show_margins.setChecked(True)
+        self._chk_show_margins.setChecked(self._show_printable_margins)
         self._chk_show_margins.toggled.connect(self._on_toggle_margins)
         tb_layout.addWidget(self._chk_show_margins)
 
@@ -898,6 +932,30 @@ class PrintDialog(QDialog):
         self._update_active_devmode()
         self._preview.updatePreview()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(80, self._preview.fitInView)
+
+    def _save_print_settings(self):
+        try:
+            printer_name = self._combo_printers.currentData()
+            if printer_name:
+                self._settings.setValue("print/last_printer", printer_name)
+            scale_mode = self._combo_scale.currentData()
+            if scale_mode:
+                self._settings.setValue("print/scaling_mode", scale_mode)
+            self._settings.setValue("print/center", self._chk_center.isChecked())
+            self._settings.setValue("print/show_margins", self._chk_show_margins.isChecked())
+            dpi = self._combo_dpi.currentData()
+            if dpi:
+                self._settings.setValue("print/resolution", dpi)
+            duplex = self._combo_duplex.currentData()
+            if duplex is not None:
+                val = duplex.value if hasattr(duplex, "value") else int(duplex)
+                self._settings.setValue("print/duplex", val)
+        except Exception:
+            pass
+
     def _on_printer_changed(self, index: int):
         if index < 0:
             return
@@ -907,6 +965,8 @@ class PrintDialog(QDialog):
             self._active_devmode = None
             self._sync_printer_to_controls()
             self._update_overflow_warning()
+            self._save_print_settings()
+            QTimer.singleShot(50, self._preview.fitInView)
 
     def _on_paper_size_changed(self, index: int):
         if index < 0:
@@ -918,12 +978,16 @@ class PrintDialog(QDialog):
             self._update_active_devmode()
             self._update_overflow_warning()
             self._preview.updatePreview()
+            self._save_print_settings()
+            QTimer.singleShot(50, self._preview.fitInView)
 
     def _on_orientation_changed(self):
         self._update_orientation()
         self._update_active_devmode()
         self._update_overflow_warning()
         self._preview.updatePreview()
+        self._save_print_settings()
+        QTimer.singleShot(50, self._preview.fitInView)
 
     def _update_orientation(self):
         mode = self._combo_orient.currentData()
@@ -942,6 +1006,7 @@ class PrintDialog(QDialog):
         if mode is not None:
             self._printer.setDuplex(mode)
             self._update_active_devmode()
+            self._save_print_settings()
 
     def _on_copies_changed(self, val: int):
         self._printer.setCopyCount(val)
@@ -951,10 +1016,12 @@ class PrintDialog(QDialog):
     def _on_scale_mode_changed(self):
         self._update_overflow_warning()
         self._preview.updatePreview()
+        self._save_print_settings()
 
     def _on_toggle_margins(self, checked: bool):
         self._show_printable_margins = checked
         self._preview.updatePreview()
+        self._save_print_settings()
 
     def _set_single_page_view(self):
         self._btn_single_view.setChecked(True)
@@ -1133,18 +1200,38 @@ class PrintDialog(QDialog):
             painter.drawImage(target_rect_px, img)
             del pix
 
-            # Draw printable margins dashed boundary if enabled
+            # Draw printable margins dashed boundary and shaded strips if enabled
             if self._show_printable_margins:
                 painter.save()
-                pen = QPen(QColor(230, 80, 50, 180), 1.0, Qt.PenStyle.DashLine)
+                margin_fill = QColor(239, 68, 68, 28)
+                paper_w_px = paper_w_pt * scale_px
+                paper_h_px = paper_h_pt * scale_px
+
+                mx0 = paint_rect_pt.x() * scale_px
+                my0 = paint_rect_pt.y() * scale_px
+                mw = paint_rect_pt.width() * scale_px
+                mh = paint_rect_pt.height() * scale_px
+                mx1 = mx0 + mw
+                my1 = my0 + mh
+
+                # 1. Soft shaded strips on the 4 unprintable edges
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(margin_fill)
+                if my0 > 0:
+                    painter.drawRect(QRectF(0, 0, paper_w_px, my0))
+                if my1 < paper_h_px:
+                    painter.drawRect(QRectF(0, my1, paper_w_px, paper_h_px - my1))
+                if mx0 > 0:
+                    painter.drawRect(QRectF(0, my0, mx0, mh))
+                if mx1 < paper_w_px:
+                    painter.drawRect(QRectF(mx1, my0, paper_w_px - mx1, mh))
+
+                # 2. Crisp, cosmetic dashed line around the printable boundary
+                pen = QPen(QColor(239, 68, 68, 220), 2.0, Qt.PenStyle.DashLine)
+                pen.setCosmetic(True)
                 painter.setPen(pen)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
-                printable_rect_px = QRectF(
-                    paint_rect_pt.x() * scale_px,
-                    paint_rect_pt.y() * scale_px,
-                    paint_rect_pt.width() * scale_px,
-                    paint_rect_pt.height() * scale_px,
-                )
+                printable_rect_px = QRectF(mx0, my0, mw, mh)
                 painter.drawRect(printable_rect_px)
                 painter.restore()
 
@@ -1336,6 +1423,7 @@ class PrintDialog(QDialog):
             self._printer.setPageSize(selected_page_size)
         self._update_orientation()
         self._update_active_devmode()
+        self._save_print_settings()
 
         printer_name = self._combo_printers.currentData()
         project_name = getattr(self._project, "name", "") or "Progetto"
@@ -1385,7 +1473,8 @@ class PrintDialog(QDialog):
         QMessageBox.critical(self, "Errore di stampa", err_msg)
 
     def close_document(self):
-        """Cancel worker, close fitz document, and remove temp file if owned."""
+        """Cancel worker, close fitz document, save settings, and remove temp file if owned."""
+        self._save_print_settings()
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self._worker.wait()

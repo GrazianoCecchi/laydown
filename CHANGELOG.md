@@ -6,6 +6,20 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Visualizzazione area stampabile periferica e margini non stampabili (Print Dialog & Finestra Principale):**
+  - **Tracciamento visivo dei margini fisici nel Print Dialog (`laydown/ui/print_dialog.py`):** risolta l'anomalia per cui la casella *"Mostra margini stampante"* non rendeva visibile il perimetro su superfici ad alta risoluzione. Con l'adozione di `pen.setCosmetic(True)` a 2px e l'aggiunta di fasce semitrasparenti soft-red (`QColor(239, 68, 68, 28)`) sulle 4 aree non stampabili dei rulli hardware della periferica, l'operatore distingue chiaramente e immediatamente la zona sicura di stampa dal perimetro a rischio taglio/perdita crocini.
+  - **Overlay dell'area stampabile sulla Finestra Principale (`laydown/ui/preview_panel.py` e `laydown/ui/main_window.py`):** introdotta la possibilità di visualizzare in tempo reale l'area utile di stampa e i margini fisici del driver direttamente sul `SheetCanvas` principale. Attivabile tramite la voce di menu `Visualizza → Mostra area stampabile periferica`, la scorciatoia da tastiera `Alt+5`, o l'apposito pulsante dedicato aggiunto nella barra degli strumenti (toolbar).
+  - **Rilevamento intelligente dei margini fisici:** i margini provengono dinamicamente dalla stampante selezionata/predefinita tramite l'interrogazione delle metriche `QPrinter.pageLayout()` o fallback calibrato a 4 mm.
+
+- **Auto-fit adattivo e dimensionamento reattivo del foglio (`SheetCanvas` & `PrintDialog`):**
+  - **Espansione automatica all'apertura del documento e ridimensionamento finestra:** risolto il problema per cui i fogli apparivano rimpiccioliti al centro della finestra all'apertura dell'applicazione. `SheetCanvas` ora calcola in modo reattivo l'adattamento iniziale (`_fit_initial`) massimizzando le dimensioni del foglio nello spazio disponibile con margini equilibrati, sia a foglio singolo che a vista multi-colonna.
+  - **Reattività continua sul resize:** il ridimensionamento della finestra adatta fluidamente le dimensioni del foglio senza distorcere l'anteprima, preservando al contempo lo zoom manuale non appena l'utente decide di ingrandire o ridurre esplicitamente.
+  - **Auto-fit iniziale nel Print Dialog:** implementato un allineamento istantaneo `fitInView` alla visualizzazione della finestra di stampa (`showEvent`) e su ogni modifica di stampante, carta o orientamento.
+
+- **Persistenza completa delle impostazioni di stampa (`QSettings`):**
+  - La configurazione scelta dall'operatore viene memorizzata in modo permanente tra una sessione e l'altra e al rientro nella finestra di stampa: periferica preferita, formato carta, orientamento, modalità di scala (100% effettivo vs adatta al foglio), centratura, duplex (fronte/retro), risoluzione di stampa (150 DPI bozza vs 600/1200 DPI alta definizione) e stato di visualizzazione dei margini.
+
+
 - **Risoluzione driver PostScript & HP UPD per stampa A3 reale (1:1) e layout anteprima:**
   - **Sincronizzazione in-memory dei token proprietari HP UPD (`laydown/ui/win_print.py`):** risolto il problema critico per cui le stampanti con driver HP Universal Print Driver (PostScript) forzavano l'output su A4 riducendo l'A3. L'analisi dello spooler raw (`.prn`) ha evidenziato che la chiamata Winspool `DocumentPropertiesW` senza GUI cancellava i dati privati reimpostando il token binario `PageSize\x00A4\x00`. Il nuovo merger sincronizza direttamente la memoria `DEVMODEW` pubblica e allinea i token proprietari `PageSize` e `HPOrientation` nel buffer privato `dmDriverExtra` mantenendo rigorosamente coerente l'header di lunghezza (`dmDriverExtra`).
   - **Rimozione di qualsiasi passthrough grezzo a livello di pagina:** eliminata la chiamata a basso livello `POSTSCRIPT_PASSTHROUGH` (4115) che, iniettando comandi di selezione formato carta durante il ciclo attivo della pagina, mandava in errore irreversibile l'interprete PostScript firmware della stampante provocandone il riavvio hardware. L'emissione PostScript DSC è ora delegata in modo pulito e nativo al driver Windows GDI.
