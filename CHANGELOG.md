@@ -6,6 +6,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Pipeline di Stampa Vettoriale PostScript nativa e selettore del motore di spooling (Fase 1):**
+  - **Emissione vettoriale PostScript pura senza rasterizzazione (`laydown/ui/win_print.py`):** introdotta la nuova funzione `print_pdf_direct_vector_ps`. Utilizza la pipeline vettoriale `QSvgRenderer` e `QPainter` su `QPrinter` per convertire ogni pagina impaginata in primitive vettoriali native (curve di Bézier, tracciati, font e crocini di registro a spessore nominale). Il driver PostScript della macchina da stampa riceve codice vettoriale PostScript Level 3 puro, delegando la rasterizzazione al processore hardware RIP della stampante (1200×1200 / 2400 DPI con screening di fabbrica) ed eliminando completamente file di spool bitmap giganti o sfocature da pixel.
+  - **Selettore del Motore di Stampa nel Print Dialog (`laydown/ui/print_dialog.py`):** aggiunto il nuovo gruppo *"Motore di Stampa"* con scelta intuitiva:
+    - `⚡ Vettoriale PostScript (Periferiche Pro & RIP)`: emissione vettoriale nativa per stampanti professionali (Ricoh, Canon, HP UPD PostScript, Konica Minolta, Xerox) e RIP di produzione. In questa modalità i DPI raster vengono disabilitati poiché la risoluzione ottica è gestita direttamente dall'hardware.
+    - `🖼️ Raster GDI (Alta Definizione — Universale)`: modalità bitmap ad alta definizione (300 / 600 / 1200 DPI) per stampanti standard senza interprete PostScript.
+  - **Pulsanti di azione e status dinamici:** i pulsanti di invio e i messaggi di avanzamento indicano esplicitamente la modalità selezionata (*"Stampa Alta Definizione (Vettoriale PostScript)"* vs *"Stampa Alta Definizione (Raster GDI)"*), garantendo trasparenza operativa.
+  - **Persistenza completa (`QSettings`):** la modalità del motore di stampa (`print/spool_mode`) viene memorizzata in modo permanente tra le sessioni.
+
 - **Imposizione professionale a Dimensione Reale (100% 1:1) di default ed evidenziazione sbordamento (Overflow):**
   - **Preservazione rigorosa della scala 1:1 originale (`laydown/engine/geometry.py`):** modificato il comportamento di default dell'imposizione. Il software non riduce né rimpicciolisce più arbitrariamente le pagine quando se ne inseriscono molte sul foglio o quando le pose eccedono i margini o il formato carta. Le pagine mantengono al 100% le loro dimensioni fisiche reali originali.
   - **Evidenziazione visiva dello sbordamento sul canvas (`laydown/ui/preview_panel.py`):** quando le pagine a grandezza 100% eccedono i limiti fisici del foglio o invadono l'area non stampabile, il contorno delle celle interessate viene evidenziato visivamente con un perimetro tratteggiato rosso d'allerta (`#ef4444`) e una velatura semitrasparente d'avviso, consentendo all'operatore di cogliere immediatamente a colpo d'occhio il problema di spazio.

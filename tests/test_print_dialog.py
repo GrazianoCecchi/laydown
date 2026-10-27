@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtPrintSupport import QPrinter
 
 from laydown.engine.data_model import Project
+from laydown.ui import win_print
 from laydown.ui.print_dialog import (
     parse_page_range,
     compute_sheet_placement,
@@ -420,6 +421,57 @@ class TestWinPrintIntegration:
             h_mm = res[0].rect.height * 25.4 / 72.0
             assert abs(w_mm - 420.0) < 3.0
             assert abs(h_mm - 297.0) < 3.0
+            res.close()
+        finally:
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+
+    def test_spool_mode_selection_and_description(self, app, sample_project, sample_pdf):
+        dlg = PrintDialog(project=sample_project, pdf_path=sample_pdf)
+        try:
+            assert hasattr(dlg, "_combo_spool_mode")
+            assert dlg._combo_spool_mode.count() == 2
+
+            # Select Vector PostScript
+            v_idx = dlg._combo_spool_mode.findData("vector_ps")
+            assert v_idx >= 0
+            dlg._combo_spool_mode.setCurrentIndex(v_idx)
+            assert not dlg._combo_dpi.isEnabled()
+            assert "Vettoriale PostScript" in dlg._btn_print.text()
+            assert "vettoriale nativa" in dlg._lbl_spool_desc.text().lower()
+
+            # Select Raster GDI
+            g_idx = dlg._combo_spool_mode.findData("gdi_raster")
+            assert g_idx >= 0
+            dlg._combo_spool_mode.setCurrentIndex(g_idx)
+            assert dlg._combo_dpi.isEnabled()
+            assert "Raster GDI" in dlg._btn_print.text()
+            assert "rasterizzazione" in dlg._lbl_spool_desc.text().lower()
+        finally:
+            dlg.close_document()
+
+    def test_print_pdf_direct_vector_ps_output(self, sample_pdf):
+        fd, out_path = tempfile.mkstemp(suffix=".pdf")
+        os.close(fd)
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+
+        try:
+            win_print.print_pdf_direct_vector_ps(
+                printer_name="",
+                devmode_bytes=None,
+                doc_path=sample_pdf,
+                sheet_indices=[0],
+                scaling_mode="actual",
+                center=True,
+                output_file=out_path,
+                page_size=QPageSize(QPageSize.PageSizeId.A4),
+            )
+            assert os.path.exists(out_path)
+            res = fitz.open(out_path)
+            assert len(res) == 1
+            # Verify drawings exist in vector output
+            assert len(res[0].get_drawings()) > 0
             res.close()
         finally:
             if os.path.exists(out_path):
