@@ -435,6 +435,61 @@ def parse_devmode_settings(devmode_bytes: bytes) -> dict:
     }
 
 
+def get_printer_hardware_margins(
+    printer_name: str,
+    devmode_bytes: Optional[bytes] = None,
+) -> Tuple[float, float, float, float]:
+    """
+    Query the true physical unprintable hardware margins (left, top, right, bottom)
+    in points (pt) from the printer driver.
+
+    Uses Windows GDI GetDeviceCaps (PHYSICALOFFSETX, PHYSICALOFFSETY, PHYSICALWIDTH,
+    PHYSICALHEIGHT, HORZRES, VERTRES, LOGPIXELSX, LOGPIXELSY) on an Information Context
+    (CreateICW), ensuring zero print jobs are queued while obtaining exact roller margins.
+    """
+    fallback_pt = 4.2 * 72.0 / 25.4  # ~11.9 pt (~4.2 mm standard roller inset)
+    if not is_windows() or not printer_name or gdi32 is None:
+        return (fallback_pt, fallback_pt, fallback_pt, fallback_pt)
+
+    hdc = None
+    try:
+        devmode_buf = None
+        if devmode_bytes:
+            devmode_buf = ctypes.create_string_buffer(devmode_bytes, len(devmode_bytes))
+        # CreateICW creates an Information Context: fast, read-only device metrics
+        hdc = gdi32.CreateICW("WINSPOOL", printer_name, None, devmode_buf)
+        if not hdc:
+            hdc = gdi32.CreateDCW("WINSPOOL", printer_name, None, devmode_buf)
+        if not hdc:
+            return (fallback_pt, fallback_pt, fallback_pt, fallback_pt)
+
+        dpi_x = gdi32.GetDeviceCaps(hdc, LOGPIXELSX) or 600
+        dpi_y = gdi32.GetDeviceCaps(hdc, LOGPIXELSY) or 600
+        phys_w = gdi32.GetDeviceCaps(hdc, PHYSICALWIDTH)
+        phys_h = gdi32.GetDeviceCaps(hdc, PHYSICALHEIGHT)
+        off_x = gdi32.GetDeviceCaps(hdc, PHYSICALOFFSETX)
+        off_y = gdi32.GetDeviceCaps(hdc, PHYSICALOFFSETY)
+        printable_w = gdi32.GetDeviceCaps(hdc, HORZRES)
+        printable_h = gdi32.GetDeviceCaps(hdc, VERTRES)
+
+        m_left_pt = max(0.0, off_x * 72.0 / dpi_x)
+        m_top_pt = max(0.0, off_y * 72.0 / dpi_y)
+        m_right_pt = max(0.0, (phys_w - off_x - printable_w) * 72.0 / dpi_x)
+        m_bottom_pt = max(0.0, (phys_h - off_y - printable_h) * 72.0 / dpi_y)
+
+        # If margins are completely 0 (e.g. virtual PDF or edge-to-edge), provide
+        # standard 4.2mm printable margin guide so user sees the safety zone.
+        if m_left_pt < 0.5 and m_top_pt < 0.5 and m_right_pt < 0.5 and m_bottom_pt < 0.5:
+            return (fallback_pt, fallback_pt, fallback_pt, fallback_pt)
+
+        return (m_left_pt, m_top_pt, m_right_pt, m_bottom_pt)
+    except Exception:
+        return (fallback_pt, fallback_pt, fallback_pt, fallback_pt)
+    finally:
+        if hdc and gdi32:
+            gdi32.DeleteDC(hdc)
+
+
 # ── Direct GDI Spooler Printing ─────────────────────────────
 
 def print_pdf_direct_gdi(

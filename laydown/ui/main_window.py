@@ -363,7 +363,7 @@ class MainWindow(QMainWindow):
             view_menu.addAction(action)
 
         view_menu.addSeparator()
-        self._act_margins = QAction("Mostra area stampabile &periferica", self, checkable=True,
+        self._act_margins = QAction(mi("printable_area"), "Mostra area stampabile &periferica", self, checkable=True,
                                     shortcut="Alt+5")
         self._act_margins.toggled.connect(self._on_margins_toggle)
         view_menu.addAction(self._act_margins)
@@ -432,8 +432,8 @@ class MainWindow(QMainWindow):
         row.addWidget(self._btn_inspect)
 
         self._btn_margins = _tool_btn(
-            lucide("print"),
-            "Mostra area stampabile della periferica (Alt+5)",
+            lucide("printable_area"),
+            "Mostra area utile e margini periferica (Alt+5)",
             checkable=True,
         )
         self._btn_margins.toggled.connect(self._on_margins_toggle)
@@ -710,30 +710,19 @@ class MainWindow(QMainWindow):
     def _get_printer_margins_pt(self) -> tuple[float, float, float, float]:
         """Return (left, top, right, bottom) hardware unprintable margins in points."""
         try:
-            from PyQt6.QtPrintSupport import QPrinter, QPrinterInfo
+            from laydown.ui.win_print import get_printer_hardware_margins
             printer_name = self._settings.value("print/last_printer", "")
-            target_info = None
+            if not printer_name:
+                from PyQt6.QtPrintSupport import QPrinterInfo
+                def_p = QPrinterInfo.defaultPrinter()
+                if def_p and not def_p.isNull():
+                    printer_name = def_p.printerName()
             if printer_name:
-                for p in QPrinterInfo.availablePrinters():
-                    if p.printerName() == printer_name:
-                        target_info = p
-                        break
-            if not target_info:
-                target_info = QPrinterInfo.defaultPrinter()
-            if target_info and not target_info.isNull():
-                printer = QPrinter(target_info)
-                layout = printer.pageLayout()
-                full = layout.fullRectPoints()
-                paint = layout.paintRectPoints()
-                m_left = max(0.0, float(paint.left() - full.left()))
-                m_top = max(0.0, float(paint.top() - full.top()))
-                m_right = max(0.0, float(full.right() - paint.right()))
-                m_bottom = max(0.0, float(full.bottom() - paint.bottom()))
-                return (m_left, m_top, m_right, m_bottom)
+                return get_printer_hardware_margins(printer_name)
         except Exception as exc:
             _LOG.debug("Could not determine printer margins: %s", exc)
-        # Fallback: 4.0 mm = ~11.34 pt
-        fallback_pt = 4.0 * 72.0 / 25.4
+        # Fallback: 4.2 mm = ~11.9 pt
+        fallback_pt = 4.2 * 72.0 / 25.4
         return (fallback_pt, fallback_pt, fallback_pt, fallback_pt)
 
     def _on_margins_toggle(self, checked: bool):

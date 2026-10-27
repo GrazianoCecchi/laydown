@@ -289,6 +289,8 @@ class SheetCanvas(QScrollArea):
         self._pixmaps: List[QPixmap] = []
         self._columns = 2
         self._zoom = 0.0  # 0 = auto-fit on first render
+        self._auto_fit = True
+        self._last_fit_size = (0, 0)
         self._base_dpi = 72        # the PDF's own unit scale — pixmaps are rendered above this
         self._render_dpi = 96
         self._sheet_widgets: list = []
@@ -389,6 +391,9 @@ class SheetCanvas(QScrollArea):
         self._stop_workers()
         self._project = None
         self._pixmaps.clear()
+        self._zoom = 0.0
+        self._auto_fit = True
+        self._last_fit_size = (0, 0)
         self._show_placeholder()
 
     def _sheet_size_pt(self):
@@ -410,14 +415,17 @@ class SheetCanvas(QScrollArea):
             self._debounce.start()
 
     def zoom_in(self):
+        self._auto_fit = False
         self._apply_zoom(min(4.0, (self._zoom if self._zoom > 0 else 1.0) * 1.25))
 
     def zoom_out(self):
+        self._auto_fit = False
         self._apply_zoom(max(0.15, (self._zoom if self._zoom > 0 else 1.0) / 1.25))
 
     def fit_width(self):
         if not self._pixmaps:
             return
+        self._auto_fit = False
         avail = self.viewport().width() - self._grid.spacing() * (self._columns + 1) - 40
         per_col = avail / self._columns
         sheet_w, _ = self._sheet_size_pt()
@@ -426,9 +434,11 @@ class SheetCanvas(QScrollArea):
     def fit_page(self):
         if not self._pixmaps:
             return
+        self._auto_fit = True
         self._fit_initial()
 
     def actual_size(self):
+        self._auto_fit = False
         try:
             screen_dpi = QApplication.primaryScreen().logicalDotsPerInch()
         except Exception:
@@ -517,9 +527,10 @@ class SheetCanvas(QScrollArea):
         self._render_dpi = render_dpi
         # QPixmap belongs on the GUI thread; the worker handed us QImages.
         self._pixmaps = [QPixmap.fromImage(img) for img in images]
-        self._rebuild_display()
-        if self._zoom <= 0:
-            QTimer.singleShot(60, self._fit_initial)
+        if self._zoom <= 0 or self._auto_fit:
+            self._fit_initial()
+        else:
+            self._rebuild_display()
 
     def _fit_initial(self):
         if not self._pixmaps:
@@ -531,21 +542,27 @@ class SheetCanvas(QScrollArea):
         if sheet_w <= 0 or sheet_h <= 0:
             return
 
+        self._last_fit_size = (vp.width(), vp.height())
         # If 1 sheet or 1 column, fit page comfortably in full viewport
         if len(self._pixmaps) == 1:
             avail_w = vp.width() - 40
             avail_h = vp.height() - 60
-            self._apply_zoom(min(avail_w / sheet_w, avail_h / sheet_h))
         else:
             avail_w = (vp.width() - 60) / self._columns
             avail_h = vp.height() - 70
-            self._apply_zoom(min(avail_w / sheet_w, avail_h / sheet_h))
-        self._zoom = 0.0  # Keep 0.0 so auto-fit mode stays active across window resizing
+
+        new_zoom = max(0.1, min(avail_w / sheet_w, avail_h / sheet_h))
+        if abs(self._zoom - new_zoom) > 0.01 or not self._sheet_widgets:
+            self._zoom = new_zoom
+            self._rebuild_display()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._zoom <= 0 and self._pixmaps:
-            self._fit_initial()
+        if self._auto_fit and self._pixmaps:
+            vp = self.viewport()
+            last_w, last_h = self._last_fit_size
+            if abs(vp.width() - last_w) > 20 or abs(vp.height() - last_h) > 20:
+                self._fit_initial()
 
     def _on_error(self, msg: str, generation: int):
         if generation != self._generation:
@@ -594,10 +611,16 @@ class SheetCanvas(QScrollArea):
             lbl.setStyleSheet(f"border: 1px solid {t.BORDER};")
             vbox.addWidget(lbl)
 
-            num = QLabel(str(i + 1))
+            total_sheets = len(self._pixmaps)
+            sheet_title = f"Foglio {i + 1} di {total_sheets}" if total_sheets > 1 else f"Foglio {i + 1}"
+            num = QLabel(sheet_title)
             num.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            num.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_2XS}px; background: transparent;")
-            vbox.addWidget(num)
+            num.setStyleSheet(
+                f"color: {t.FG}; font-size: {t.TEXT_SM}px; font-weight: 600;"
+                f"padding: 3px 12px; background: {t.RAISED};"
+                f"border: 1px solid {t.BORDER}; border-radius: {t.RADIUS_SM}px;"
+            )
+            vbox.addWidget(num, 0, Qt.AlignmentFlag.AlignHCenter)
 
             self._grid.addWidget(container, row, col,
                                  Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)

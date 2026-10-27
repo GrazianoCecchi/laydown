@@ -1072,9 +1072,12 @@ class PrintDialog(QDialog):
         paper_w_pt = float(paper_rect_pt.width())
         paper_h_pt = float(paper_rect_pt.height())
 
-        paint_rect_pt = self._printer.pageLayout().paintRectPoints()
-        paint_w_pt = float(paint_rect_pt.width())
-        paint_h_pt = float(paint_rect_pt.height())
+        printer_name = self._combo_printers.currentData() or ""
+        m_l_pt, m_t_pt, m_r_pt, m_b_pt = win_print.get_printer_hardware_margins(
+            printer_name, self._active_devmode
+        )
+        paint_w_pt = max(0.0, paper_w_pt - m_l_pt - m_r_pt)
+        paint_h_pt = max(0.0, paper_h_pt - m_t_pt - m_b_pt)
 
         overflows_paper = (self._sheet_w_pt > paper_w_pt + 1.0) or (self._sheet_h_pt > paper_h_pt + 1.0)
         overflows_printable = (self._sheet_w_pt > paint_w_pt + 1.0) or (self._sheet_h_pt > paint_h_pt + 1.0)
@@ -1160,7 +1163,14 @@ class PrintDialog(QDialog):
         paper_w_pt = float(paper_rect_pt.width())
         paper_h_pt = float(paper_rect_pt.height())
 
-        paint_rect_pt = printer.pageLayout().paintRectPoints()
+        # Query true physical unprintable hardware margins (roller offsets)
+        printer_name = self._combo_printers.currentData() or ""
+        m_l_pt, m_t_pt, m_r_pt, m_b_pt = win_print.get_printer_hardware_margins(
+            printer_name, self._active_devmode
+        )
+        paint_w_pt = max(0.0, paper_w_pt - m_l_pt - m_r_pt)
+        paint_h_pt = max(0.0, paper_h_pt - m_t_pt - m_b_pt)
+
         scale_px = printer.resolution() / 72.0
         scaling_mode = self._combo_scale.currentData()
         center = self._chk_center.isChecked()
@@ -1207,10 +1217,10 @@ class PrintDialog(QDialog):
                 paper_w_px = paper_w_pt * scale_px
                 paper_h_px = paper_h_pt * scale_px
 
-                mx0 = paint_rect_pt.x() * scale_px
-                my0 = paint_rect_pt.y() * scale_px
-                mw = paint_rect_pt.width() * scale_px
-                mh = paint_rect_pt.height() * scale_px
+                mx0 = m_l_pt * scale_px
+                my0 = m_t_pt * scale_px
+                mw = paint_w_pt * scale_px
+                mh = paint_h_pt * scale_px
                 mx1 = mx0 + mw
                 my1 = my0 + mh
 
