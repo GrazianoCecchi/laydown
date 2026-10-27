@@ -218,10 +218,13 @@ class TestCLI:
         assert rc == 0, capsys.readouterr().out + capsys.readouterr().err
 
         page = fitz.open(out)[0]
-        xs0 = [d["rect"].x0 for d in page.get_drawings()]
-        ys0 = [d["rect"].y0 for d in page.get_drawings()]
-        xs1 = [d["rect"].x1 for d in page.get_drawings()]
-        ys1 = [d["rect"].y1 for d in page.get_drawings()]
+        # In 2-Up, cell 1 has the real page and cell 2 has the placeholder simulating it.
+        # Check that the placed card in cell 1 was scaled to fit the cell.
+        card1_rects = [d["rect"] for d in page.get_drawings() if d["rect"].x1 <= page.rect.width / 2 + 10]
+        xs0 = [r.x0 for r in card1_rects]
+        ys0 = [r.y0 for r in card1_rects]
+        xs1 = [r.x1 for r in card1_rects]
+        ys1 = [r.y1 for r in card1_rects]
         bbox = fitz.Rect(min(xs0), min(ys0), max(xs1), max(ys1))
         assert (mm(bbox.width), mm(bbox.height)) == pytest.approx((205.0, 113.9), abs=0.1)
 
@@ -232,10 +235,13 @@ class TestCLI:
         assert rc == 0
 
         page = fitz.open(out)[0]
-        xs0 = [d["rect"].x0 for d in page.get_drawings()]
-        ys0 = [d["rect"].y0 for d in page.get_drawings()]
-        xs1 = [d["rect"].x1 for d in page.get_drawings()]
-        ys1 = [d["rect"].y1 for d in page.get_drawings()]
+        # In 2-Up, cell 1 has the real page and cell 2 has the placeholder simulating it.
+        # Check that card 1 printed at its actual size (90x50 mm).
+        card1_rects = [d["rect"] for d in page.get_drawings() if d["rect"].x1 <= page.rect.width / 2 + 10]
+        xs0 = [r.x0 for r in card1_rects]
+        ys0 = [r.y0 for r in card1_rects]
+        xs1 = [r.x1 for r in card1_rects]
+        ys1 = [r.y1 for r in card1_rects]
         bbox = fitz.Rect(min(xs0), min(ys0), max(xs1), max(ys1))
         assert (mm(bbox.width), mm(bbox.height)) == pytest.approx((90.0, 50.0), abs=0.1)
 

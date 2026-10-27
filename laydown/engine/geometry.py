@@ -93,6 +93,33 @@ def grid_for(layout) -> Tuple[int, int]:
         ) from None
 
 
+def should_use_compact_grid(
+    project: Project,
+    cols: int,
+    rows: int,
+    item_size: Optional[Tuple[float, float]] = None,
+) -> bool:
+    """True when pages should be placed side-by-side with exact gutters and centered."""
+    if project.layout.scaling == PageScaling.FIT_TO_CELL:
+        return False
+    if project.layout.repeat_mode != RepeatMode.OFF:
+        return True
+    if item_size is None:
+        item_size = get_source_box_size_pt(project)
+    if item_size is None or item_size[0] <= 0 or item_size[1] <= 0:
+        return False
+    sheet_w, sheet_h = sheet_size_pt(project)
+    ml, mr, mt, mb = margins_pt(project)
+    avail_w = sheet_w - ml - mr
+    avail_h = sheet_h - mt - mb
+    gh = mm_to_pt(project.layout.gutter_h_mm)
+    gv = mm_to_pt(project.layout.gutter_v_mm)
+    pw, ph = item_size
+    fits_up = (cols * pw + (cols - 1) * gh <= avail_w + 0.5) and (rows * ph + (rows - 1) * gv <= avail_h + 0.5)
+    fits_rot = (cols * ph + (cols - 1) * gh <= avail_w + 0.5) and (rows * pw + (rows - 1) * gv <= avail_h + 0.5)
+    return fits_up or (project.layout.auto_rotate and fits_rot)
+
+
 def cell_grid(
     project: Project,
     cols: int,
@@ -100,6 +127,10 @@ def cell_grid(
     item_size: Optional[Tuple[float, float]] = None,
 ) -> List[fitz.Rect]:
     """The cols×rows cells of a sheet, in reading order."""
+    if item_size is not None:
+        if should_use_compact_grid(project, cols, rows, item_size):
+            return step_and_repeat_grid(project, cols, rows, item_size=item_size)
+
     if project.layout.repeat_mode != RepeatMode.OFF:
         return step_and_repeat_grid(project, cols, rows, item_size=item_size)
 
@@ -224,7 +255,7 @@ def step_and_repeat_grid(
     avail_h = sheet_h - mt - mb
 
     if avail_w <= 0 or avail_h <= 0:
-        raise ValueError("Margins too large for sheet size")
+        raise ValueError("Margins/gutters too large for sheet size")
 
     if item_size is None:
         item_size = get_source_box_size_pt(project)
@@ -257,6 +288,14 @@ def step_and_repeat_grid(
             scale_rot = min(avail_w / max(1e-6, w_rot), avail_h / max(1e-6, h_rot))
             if scale_rot > scale_up:
                 pw, ph = ph, pw
+
+    w_tot = cols * pw + (cols - 1) * gh
+    h_tot = rows * ph + (rows - 1) * gv
+    if project.layout.scaling == PageScaling.FIT_TO_CELL or w_tot > avail_w + 0.1 or h_tot > avail_h + 0.1:
+        scale = min(avail_w / max(1e-6, w_tot), avail_h / max(1e-6, h_tot))
+        if project.layout.scaling == PageScaling.FIT_TO_CELL or scale < 1.0:
+            pw *= scale
+            ph *= scale
 
     total_w = cols * pw + (cols - 1) * gh
     total_h = rows * ph + (rows - 1) * gv
@@ -526,6 +565,7 @@ class Placement:
     """One source page in one cell of one sheet."""
     cell: fitz.Rect
     page_index: int  # index into the source document; -1 = deliberately blank
+    is_placeholder: bool = False
 
 
 @dataclass(frozen=True)
@@ -586,18 +626,21 @@ def _plan_nup(
     sheets = []
     for si in range(num_sheets):
         placements = []
-        if mode != RepeatMode.OFF and n > 0:
-            first_idx = effective_indices[si * per_sheet] if si * per_sheet < n else 0
-            item_size = get_source_box_size_pt(project, doc=src_doc, page_index=first_idx)
-            cells = cell_grid(project, cols, rows, item_size=item_size)
-        else:
-            cells = cell_grid(project, cols, rows)
+        first_idx = effective_indices[si * per_sheet] if si * per_sheet < n else (effective_indices[0] if n > 0 else 0)
+        item_size = get_source_box_size_pt(project, doc=src_doc, page_index=first_idx) if n > 0 else None
+        cells = cell_grid(project, cols, rows, item_size=item_size)
 
+        last_page_idx = first_idx
         for ci in range(per_sheet):
             idx = si * per_sheet + ci
-            if idx >= n:
-                break
-            placements.append(Placement(cells[ci], effective_indices[idx]))
+            if idx < n:
+                last_page_idx = effective_indices[idx]
+                placements.append(Placement(cells[ci], last_page_idx, is_placeholder=False))
+            else:
+                if mode == RepeatMode.OFF and n > 0:
+                    placements.append(Placement(cells[ci], last_page_idx, is_placeholder=True))
+                else:
+                    break
         sheets.append(Sheet(placements=placements, number=si + 1, total=num_sheets, grid=cells))
     return sheets
 

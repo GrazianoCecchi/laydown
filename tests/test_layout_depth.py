@@ -524,3 +524,96 @@ class TestStepAndRepeat:
         assert m0.height == pytest.approx(mm_to_pt(70.0), abs=0.05)
 
 
+class TestSequentialPagesCompactAndPlaceholder:
+    def test_sequential_pages_side_by_side_with_exact_gutters(self, source_pdf, out_path):
+        """Sequential pages (RepeatMode.OFF) are placed side-by-side with exact gutters and centered."""
+        src = source_pdf(n_pages=4, w_mm=85.0, h_mm=55.0)
+        project = a_project(
+            src, preset="A3", orientation=Orientation.LANDSCAPE,
+            cols=2, rows=2,
+            repeat_mode=RepeatMode.OFF,
+            gutter_h_mm=4.0,
+            gutter_v_mm=6.0,
+        )
+        project.sheet.margin_left_mm = 10.0
+        project.sheet.margin_right_mm = 10.0
+        project.sheet.margin_top_mm = 10.0
+        project.sheet.margin_bottom_mm = 10.0
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 1
+        placed = res.placed[0]
+        assert len(placed) == 4
+
+        # Exact card dimensions
+        for p in placed:
+            assert p.trim.width == pytest.approx(mm_to_pt(85.0), abs=0.1)
+            assert p.trim.height == pytest.approx(mm_to_pt(55.0), abs=0.1)
+            assert not p.is_placeholder
+
+        # Exact horizontal gutter (between col 0 and col 1)
+        gap_h = placed[1].trim.x0 - placed[0].trim.x1
+        assert gap_h == pytest.approx(mm_to_pt(4.0), abs=0.05)
+
+        # Exact vertical gutter (between row 0 and row 1)
+        gap_v = placed[2].trim.y0 - placed[0].trim.y1
+        assert gap_v == pytest.approx(mm_to_pt(6.0), abs=0.05)
+
+        # Centered within sheet margins
+        sheet_w, sheet_h = mm_to_pt(420.0), mm_to_pt(297.0)
+        m = mm_to_pt(10.0)
+        total_w = 2 * mm_to_pt(85.0) + mm_to_pt(4.0)
+        total_h = 2 * mm_to_pt(55.0) + mm_to_pt(6.0)
+        avail_w = sheet_w - 2 * m
+        avail_h = sheet_h - 2 * m
+        expected_x0 = m + (avail_w - total_w) / 2.0
+        expected_y0 = m + (avail_h - total_h) / 2.0
+
+        assert placed[0].trim.x0 == pytest.approx(expected_x0, abs=0.1)
+        assert placed[0].trim.y0 == pytest.approx(expected_y0, abs=0.1)
+
+    def test_placeholder_simulates_last_page_when_source_runs_short(self, source_pdf, out_path):
+        """When source PDF has fewer pages than grid cells, placeholders simulate the last inserted page."""
+        src = source_pdf(n_pages=3, w_mm=85.0, h_mm=55.0)
+        project = a_project(
+            src, preset="A3", orientation=Orientation.LANDSCAPE,
+            cols=2, rows=2,
+            repeat_mode=RepeatMode.OFF,
+        )
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 1
+        placed = res.placed[0]
+        assert len(placed) == 4
+
+        # Real pages 1, 2, 3
+        assert placed[0].page_number == 1 and not placed[0].is_placeholder
+        assert placed[1].page_number == 2 and not placed[1].is_placeholder
+        assert placed[2].page_number == 3 and not placed[2].is_placeholder
+
+        # Placeholder simulating page 3 in cell 4
+        assert placed[3].page_number == 3
+        assert placed[3].is_placeholder
+
+    def test_single_page_populates_all_cells_with_placeholders(self, source_pdf, out_path):
+        """A single-page business card populates all 10 cells of a 2x5 grid (1 real + 9 placeholders)."""
+        src = source_pdf(n_pages=1, w_mm=85.0, h_mm=55.0)
+        project = a_project(
+            src, preset="A3", orientation=Orientation.LANDSCAPE,
+            cols=2, rows=5,
+            repeat_mode=RepeatMode.OFF,
+        )
+        res = impose_detailed(project, out_path())
+        assert res.sheets == 1
+        placed = res.placed[0]
+        assert len(placed) == 10
+
+        # First cell is real page 1
+        assert placed[0].page_number == 1
+        assert not placed[0].is_placeholder
+
+        # Cells 1 to 9 are placeholders simulating page 1
+        for ci in range(1, 10):
+            assert placed[ci].page_number == 1
+            assert placed[ci].is_placeholder
+
+
+

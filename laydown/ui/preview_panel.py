@@ -83,6 +83,7 @@ class CellInfo:
     x1: float
     y1: float
     page_num: int  # 1-based, 0 = blank
+    is_placeholder: bool = False
 
 
 def cells_from_result(result: ImposeResult, sheet_idx: int) -> List[CellInfo]:
@@ -97,7 +98,10 @@ def cells_from_result(result: ImposeResult, sheet_idx: int) -> List[CellInfo]:
     if sheet_idx >= len(result.placed):
         return []
     return [
-        CellInfo(p.trim.x0, p.trim.y0, p.trim.x1, p.trim.y1, p.page_number)
+        CellInfo(
+            p.trim.x0, p.trim.y0, p.trim.x1, p.trim.y1,
+            p.page_number, is_placeholder=getattr(p, 'is_placeholder', False),
+        )
         for p in result.placed[sheet_idx]
     ]
 
@@ -128,11 +132,17 @@ def draw_overlays(
 
         if show_frames and c.page_num > 0:
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(MAGENTA, max(1.0, scale * 0.5)))
+            pen = QPen(MAGENTA, max(1.0, scale * 0.5))
+            if c.is_placeholder:
+                pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
             painter.drawRect(rect)
 
         if show_tops and c.page_num > 0:
-            painter.setPen(QPen(MAGENTA, max(1.5, scale * 0.7)))
+            pen = QPen(MAGENTA, max(1.5, scale * 0.7))
+            if c.is_placeholder:
+                pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
             painter.drawLine(QPointF(px0, py0), QPointF(px0 + pw, py0))
             cx = px0 + pw / 2
             painter.drawLine(QPointF(cx, py0), QPointF(cx, py0 + min(20 * scale / 1.5, ph * 0.06)))
@@ -144,7 +154,8 @@ def draw_overlays(
             f = QFont(t.FONT_FAMILY, fs)
             painter.setFont(f)
             painter.setPen(MAGENTA)
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(c.page_num))
+            label = f"{c.page_num}*" if c.is_placeholder else str(c.page_num)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 
     painter.end()
     return image

@@ -64,9 +64,11 @@ class TestOverlayMatchesOutput:
         try:
             assert result.sheets == 2
             assert len(cells_from_result(result, 0)) == 2
-            assert len(cells_from_result(result, 1)) == 1, (
-                "the empty half of the last sheet must not be outlined"
-            )
+            sheet1_cells = cells_from_result(result, 1)
+            assert len(sheet1_cells) == 2, "the remaining cell has a placeholder simulating page 3"
+            assert not sheet1_cells[0].is_placeholder
+            assert sheet1_cells[1].is_placeholder
+            assert sheet1_cells[1].page_num == 3
         finally:
             os.unlink(path)
 

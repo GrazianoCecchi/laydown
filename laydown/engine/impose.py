@@ -37,6 +37,7 @@ class PlacedPage:
     """Where one source page actually ended up on a sheet."""
     trim: fitz.Rect      # the cut line on the sheet — not the cell, which may be larger
     page_number: int     # 1-based, in the document as the preprocessors left it
+    is_placeholder: bool = False
 
 
 @dataclass(frozen=True)
@@ -197,7 +198,11 @@ def _render(
                 # differ from the cell is letterboxed inside it, and crop marks drawn
                 # on the cell would sit off the page edge.
                 trim_rects.append(trim)
-                on_this_sheet.append(PlacedPage(trim=trim, page_number=placement.page_index + 1))
+                on_this_sheet.append(PlacedPage(
+                    trim=trim,
+                    page_number=placement.page_index + 1,
+                    is_placeholder=placement.is_placeholder,
+                ))
 
             draw_marks(
                 page, project.marks, trim_rects,

@@ -63,14 +63,15 @@ class TestBoxSelection:
     def test_trim_box_is_what_lands_on_the_cell(self, source_pdf, out_path):
         src = source_pdf(n_pages=2, trim_inset_mm=10)
         out = out_path()
-        impose(a_project(src, box=SourceBox.TRIM, scaling=PageScaling.FIT_TO_CELL), out)
+        project = a_project(src, box=SourceBox.TRIM, scaling=PageScaling.FIT_TO_CELL)
+        impose(project, out)
 
         src_doc = fitz.open(src)
         trim = src_doc[0].trimbox
         assert trim != src_doc[0].mediabox, "fixture should have a real trim box"
 
         out_doc = fitz.open(out)
-        cell = cell_grid(a_project(src), 2, 1)[0]
+        cell = cell_grid(project, 2, 1)[0]
         found, src_found = word_centers(out_doc[0]), word_centers(src_doc[0])
 
         for corner in ("TL", "TR", "BL", "BR"):
@@ -83,12 +84,13 @@ class TestBoxSelection:
     def test_media_box_places_the_whole_sheet_instead(self, source_pdf, out_path):
         src = source_pdf(n_pages=2, trim_inset_mm=10)
         out = out_path()
-        impose(a_project(src, box=SourceBox.MEDIA), out)
+        project = a_project(src, box=SourceBox.MEDIA)
+        impose(project, out)
 
         src_doc = fitz.open(src)
         media = src_doc[0].mediabox
         out_doc = fitz.open(out)
-        cell = cell_grid(a_project(src), 2, 1)[0]
+        cell = cell_grid(project, 2, 1)[0]
         found, src_found = word_centers(out_doc[0]), word_centers(src_doc[0])
 
         for corner in ("TL", "TR", "BL", "BR"):
@@ -152,14 +154,11 @@ class TestBleed:
         # path extents for each. Only the raster shows what actually reaches paper.
         src = source_pdf(n_pages=2, trim_inset_mm=10, bleed_mm=5)
         plain, bled = out_path("plain.pdf"), out_path("bled.pdf")
-        impose(a_project(src, bleed=0.0), plain)
+        from laydown.engine.impose import impose_detailed
+        res = impose_detailed(a_project(src, bleed=0.0), plain)
         impose(a_project(src, bleed=5.0), bled)
 
-        project = a_project(src)
-        cell = cell_grid(project, 2, 1)[0]
-        src_page = fitz.open(src)[0]
-        place, _ = source_boxes(src_page, SourceSettings())
-        _, trim = target_rect(cell, place, place)
+        trim = res.placed[0][0].trim
 
         probe_x = int(trim.x0 - 5)                  # just outside the cut line
         probe_y = int((trim.y0 + trim.y1) / 2)

@@ -6,6 +6,13 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Pagine consecutive con spaziature side-by-side e segnaposto per pagine mancanti:**
+  - **Spaziature affiancate identiche a Step & Repeat:** nella modalità *"Pagine consecutive"* (`RepeatMode.OFF`), le pagine a dimensione reale (`ACTUAL_SIZE`) vengono posizionate affiancate rispettando al millimetro le impostazioni dei gutter orizzontale e verticale (`gutter_h_mm` e `gutter_v_mm`), con l'intero gruppo di celle centrato all'interno del foglio sottraendo i margini. Eliminato il distanziamento artificiale causato dalla suddivisione nominale del foglio su celle oversize.
+  - **Segnaposto simulato per pagine mancanti sul foglio:** quando il documento sorgente non ha un numero sufficiente di pagine per completare tutte le pose del foglio (ad esempio un biglietto da visita da 1 sola pagina imposto su griglia 2×5 o un numero dispari di pagine sull'ultimo foglio), le celle rimanenti vengono popolate da un segnaposto (`is_placeholder=True`) che simula la grafica dell'ultima pagina inserita.
+  - **Crocini di taglio completi:** la presenza del segnaposto assicura che i crocini di taglio (`draw_marks`) vengano tracciati per l'intera griglia di pose del foglio, permettendo il taglio regolare dell'intero cartoncino stampato.
+  - **Evidenziazione visiva nell'anteprima:** nella preview a video (`preview_panel.py`), le pose segnaposto vengono chiaramente distinte da una cornice tratteggiata (`DashLine`) e dal numero di pagina con asterisco (es. `1*`).
+  - Aggiunta la suite di test dedicata in `tests/test_layout_depth.py` (`TestSequentialPagesCompactAndPlaceholder`).
+
 ## [0.4.8] - 2026-10-26
 
 - **Installer Windows (.exe) e supporto Inno Setup:**
