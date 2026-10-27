@@ -465,7 +465,7 @@ class PrintDialog(QDialog):
         # Left panel: Settings scroll area
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
-        left_scroll.setFixedWidth(340)
+        left_scroll.setMinimumWidth(330)
         left_scroll.setFrameShape(QFrame.Shape.NoFrame)
         left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         left_scroll.setStyleSheet(f"background: transparent;")
@@ -490,6 +490,8 @@ class PrintDialog(QDialog):
         self._build_preview_area(preview_layout)
         splitter.addWidget(preview_container)
 
+        splitter.setChildrenCollapsible(False)
+        splitter.setSizes([380, 740])
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         root.addWidget(splitter, 1)
@@ -705,14 +707,16 @@ class PrintDialog(QDialog):
 
         # Warning card for unprintable margin overflow
         self._warning_frame = QFrame()
+        self._warning_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self._warning_frame.setStyleSheet(
             f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
             f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
         )
         wf_layout = QVBoxLayout(self._warning_frame)
-        wf_layout.setContentsMargins(6, 4, 6, 4)
-        wf_layout.setSpacing(2)
+        wf_layout.setContentsMargins(8, 6, 8, 6)
+        wf_layout.setSpacing(3)
         self._wf_title = QLabel("Avviso margini fisici")
+        self._wf_title.setWordWrap(True)
         self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
         self._wf_text = QLabel("Il foglio imposto eccede l'area stampabile della carta selezionata.")
         self._wf_text.setWordWrap(True)
@@ -1062,15 +1066,15 @@ class PrintDialog(QDialog):
             )
             self._warning_frame.setVisible(True)
         else:
-            paper_clean = paper_name.split("(")[0].strip()
-            self._wf_title.setText(f"Driver configurato: {paper_clean}")
+            paper_tag = "A3" if "A3" in paper_name.upper() else ("A4" if "A4" in paper_name.upper() else paper_name.split("(")[0].strip()[:10])
+            self._wf_title.setText(f"Driver pronto: Carta {paper_tag} (1:1)")
             self._wf_title.setStyleSheet(f"color: #10B981; font-size: {t.TEXT_2XS}px; font-weight: 700;")
             self._warning_frame.setStyleSheet(
                 f"background: {t.mix('#10B981', t.SURFACE, 0.15)};"
-                f"border: 1px solid #10B981; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+                f"border: 1px solid #10B981; border-radius: {t.RADIUS_SM}px; padding: 6px 8px;"
             )
             self._wf_text.setText(
-                f"Il driver di stampa è impostato per {paper_clean} 1:1 a grandezza naturale (100% senza riduzioni)."
+                f"Stampa reale 1:1 a grandezza naturale (100% senza riduzioni) su carta {paper_tag}."
             )
             self._warning_frame.setVisible(True)
 

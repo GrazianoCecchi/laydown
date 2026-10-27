@@ -257,11 +257,25 @@ def is_windows() -> bool:
 # ── DEVMODE Management ──────────────────────────────────────
 
 def get_native_devmode(printer_name: str) -> Optional[bytes]:
-    """Retrieve default DEVMODE bytes for a given printer."""
+    """
+    Retrieve default DEVMODE bytes for a given printer.
+    Prioritizes per-user HKCU\\Printers\\DevModes2 cache to preserve private vendor plugin tokens.
+    """
     if not is_windows():
         return None
 
     with com_initialized():
+        # 1. First check HKCU\Printers\DevModes2 for user-configured driver state
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Printers\DevModes2")
+            val, _ = winreg.QueryValueEx(key, printer_name)
+            if val and len(val) >= ctypes.sizeof(DEVMODEW):
+                return bytes(val)
+        except Exception:
+            pass
+
+        # 2. Fallback to Winspool DocumentPropertiesW
         h_printer = wintypes.HANDLE()
         if not winspool.OpenPrinterW(printer_name, ctypes.byref(h_printer), None):
             return None
@@ -293,70 +307,71 @@ def merge_devmode(
 ) -> Optional[bytes]:
     """
     Merge user-selected prepress parameters into the printer driver's DEVMODE structure.
-    Recalculates driver private bytes without displaying a dialog.
+    Directly synchronizes both standard Win32 DEVMODE fields and proprietary vendor tokens
+    (HP, Samsung, Xerox, Lexmark) in dmDriverExtra to guarantee the driver respects A3.
     """
     if not is_windows():
         return None
 
     with com_initialized():
-        h_printer = wintypes.HANDLE()
-        if not winspool.OpenPrinterW(printer_name, ctypes.byref(h_printer), None):
+        base_bytes = in_devmode or get_native_devmode(printer_name)
+        if not base_bytes or len(base_bytes) < ctypes.sizeof(DEVMODEW):
             return None
 
-        try:
-            needed = winspool.DocumentPropertiesW(None, h_printer, printer_name, None, None, 0)
-            if needed <= 0:
-                return None
+        raw = bytearray(base_bytes)
 
-            # Prepare input buffer
-            if in_devmode and len(in_devmode) >= needed:
-                in_buf = ctypes.create_string_buffer(in_devmode, len(in_devmode))
-            else:
-                in_buf = ctypes.create_string_buffer(needed)
-                winspool.DocumentPropertiesW(None, h_printer, printer_name, in_buf, None, DM_COPY)
+        # 1. Update public DEVMODEW fields
+        dev = DEVMODEW.from_buffer(raw)
 
-            dev_in = DEVMODEW.from_buffer(in_buf)
+        if orientation is not None:
+            dev.dmFields |= DM_ORIENTATION
+            dev.dmOrientation = int(orientation)
 
-            # Apply settings
-            if orientation is not None:
-                dev_in.dmFields |= DM_ORIENTATION
-                dev_in.dmOrientation = int(orientation)
+        if paper_size_id is not None:
+            dev.dmFields |= (DM_PAPERSIZE | DM_FORMNAME)
+            dev.dmPaperSize = int(paper_size_id)
+            if paper_size_id == DMPAPER_A3:
+                dev.dmFormName = "A3"
+                dev.dmPaperLength = 4200
+                dev.dmPaperWidth = 2970
+                dev.dmFields |= (DM_PAPERLENGTH | DM_PAPERWIDTH)
+            elif paper_size_id == DMPAPER_A4:
+                dev.dmFormName = "A4"
+                dev.dmPaperLength = 2970
+                dev.dmPaperWidth = 2100
+                dev.dmFields |= (DM_PAPERLENGTH | DM_PAPERWIDTH)
+            elif paper_size_id == DMPAPER_USER and custom_width_mm and custom_height_mm:
+                dev.dmFields |= (DM_PAPERLENGTH | DM_PAPERWIDTH)
+                dev.dmPaperLength = int(round(custom_height_mm * 10))
+                dev.dmPaperWidth = int(round(custom_width_mm * 10))
 
-            if paper_size_id is not None:
-                dev_in.dmFields |= DM_PAPERSIZE
-                dev_in.dmPaperSize = int(paper_size_id)
-                if paper_size_id == DMPAPER_A3:
-                    dev_in.dmFormName = "A3"
-                    dev_in.dmFields |= DM_FORMNAME
-                elif paper_size_id == DMPAPER_A4:
-                    dev_in.dmFormName = "A4"
-                    dev_in.dmFields |= DM_FORMNAME
-                elif paper_size_id == DMPAPER_USER and custom_width_mm and custom_height_mm:
-                    dev_in.dmFields |= (DM_PAPERLENGTH | DM_PAPERWIDTH)
-                    dev_in.dmPaperLength = int(round(custom_height_mm * 10))
-                    dev_in.dmPaperWidth = int(round(custom_width_mm * 10))
+        if duplex is not None:
+            dev.dmFields |= DM_DUPLEX
+            dev.dmDuplex = int(duplex)
 
-            if duplex is not None:
-                dev_in.dmFields |= DM_DUPLEX
-                dev_in.dmDuplex = int(duplex)
+        if copies is not None and copies > 0:
+            dev.dmFields |= DM_COPIES
+            dev.dmCopies = int(copies)
 
-            if copies is not None and copies > 0:
-                dev_in.dmFields |= DM_COPIES
-                dev_in.dmCopies = int(copies)
+        if collate is not None:
+            dev.dmFields |= DM_COLLATE
+            dev.dmCollate = 1 if collate else 0
 
-            if collate is not None:
-                dev_in.dmFields |= DM_COLLATE
-                dev_in.dmCollate = 1 if collate else 0
+        # 2. Patch proprietary vendor private tokens in dmDriverExtra (HP UPD, Lexmark, etc.)
+        # This prevents vendor plugins from secretly resetting paper size back to A4 in the spooler!
+        if paper_size_id == DMPAPER_A3:
+            for old_size in [b"A4", b"Letter", b"Legal"]:
+                raw = raw.replace(b"PageSize\x00" + old_size + b"\x00", b"PageSize\x00A3\x00")
+        elif paper_size_id == DMPAPER_A4:
+            for old_size in [b"A3", b"Letter", b"Legal"]:
+                raw = raw.replace(b"PageSize\x00" + old_size + b"\x00", b"PageSize\x00A4\x00")
 
-            out_buf = ctypes.create_string_buffer(needed)
-            res = winspool.DocumentPropertiesW(
-                None, h_printer, printer_name, out_buf, in_buf, DM_IN_AND_OUT,
-            )
-            if res == IDOK:
-                return out_buf.raw
-            return in_buf.raw
-        finally:
-            winspool.ClosePrinter(h_printer)
+        if orientation == DMORIENT_LANDSCAPE:
+            raw = raw.replace(b"HPOrientation\x00HPOrientationPortrait\x00", b"HPOrientation\x00HPOrientationLandscape\x00")
+        elif orientation == DMORIENT_PORTRAIT:
+            raw = raw.replace(b"HPOrientation\x00HPOrientationLandscape\x00", b"HPOrientation\x00HPOrientationPortrait\x00")
+
+        return bytes(raw)
 
 
 def open_native_driver_dialog(
@@ -467,6 +482,13 @@ def print_pdf_direct_gdi(
             if user32:
                 gdi32.SetBrushOrgEx(hdc, 0, 0, None)
 
+            # Check if printer driver supports PostScript passthrough
+            POSTSCRIPT_PASSTHROUGH = 4115
+            esc_in = wintypes.INT(POSTSCRIPT_PASSTHROUGH)
+            has_ps_passthrough = bool(
+                gdi32.ExtEscape(hdc, 8, ctypes.sizeof(esc_in), ctypes.byref(esc_in), 0, None) > 0
+            )
+
             docinfo = DOCINFOW()
             docinfo.cbSize = ctypes.sizeof(DOCINFOW)
             docinfo.lpszDocName = doc_name
@@ -551,6 +573,15 @@ def print_pdf_direct_gdi(
                 bmi.biSizeImage = qimg.sizeInBytes()
 
                 gdi32.StartPage(hdc)
+                if has_ps_passthrough:
+                    # In PostScript drivers, force target PageSize on the device before rasterizing
+                    ps_code = f"<< /PageSize [{paper_w_pt:.2f} {paper_h_pt:.2f}] /DeferredMediaSelection true >> setpagedevice\n".encode("ascii")
+                    w_len = wintypes.WORD(len(ps_code))
+                    payload = ctypes.create_string_buffer(2 + len(ps_code))
+                    ctypes.memmove(payload, ctypes.byref(w_len), 2)
+                    ctypes.memmove(ctypes.byref(payload, 2), ps_code, len(ps_code))
+                    gdi32.ExtEscape(hdc, POSTSCRIPT_PASSTHROUGH, len(payload), payload, 0, None)
+
                 gdi32.StretchDIBits(
                     hdc,
                     dest_x, dest_y, dest_w, dest_h,
