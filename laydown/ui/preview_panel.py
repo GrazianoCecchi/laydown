@@ -551,10 +551,8 @@ class SheetCanvas(QScrollArea):
             avail_w = (vp.width() - 60) / self._columns
             avail_h = vp.height() - 70
 
-        new_zoom = max(0.1, min(avail_w / sheet_w, avail_h / sheet_h))
-        if abs(self._zoom - new_zoom) > 0.01 or not self._sheet_widgets:
-            self._zoom = new_zoom
-            self._rebuild_display()
+        self._zoom = max(0.1, min(avail_w / sheet_w, avail_h / sheet_h))
+        self._rebuild_display()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

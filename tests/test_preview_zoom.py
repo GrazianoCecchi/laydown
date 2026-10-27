@@ -62,3 +62,26 @@ class TestClearGridDoesNotOrphan:
         assert after <= before, (
             f"top-level widgets grew {before} -> {after}; zoom is leaking windows"
         )
+
+    def test_on_done_rebuilds_display_when_settings_change(self, app):
+        from PyQt6.QtGui import QImage
+        canvas = SheetCanvas()
+        canvas.resize(800, 600)
+        canvas.show()
+        app.processEvents()
+
+        img1 = QImage(400, 300, QImage.Format.Format_RGB888)
+        img1.fill(0xFFFFFF)
+
+        # Initial render: 1 sheet
+        canvas._on_done([img1], 96, canvas._generation)
+        app.processEvents()
+        assert len(canvas._sheet_widgets) == 1
+
+        # Settings change (e.g. nup changed from 1 to 2 sheets)
+        img2 = QImage(400, 300, QImage.Format.Format_RGB888)
+        img2.fill(0xEEEEEE)
+        canvas._on_done([img1, img2], 96, canvas._generation)
+        app.processEvents()
+        assert len(canvas._sheet_widgets) == 2, "display must rebuild with 2 sheets without needing manual zoom"
+        canvas.close()
