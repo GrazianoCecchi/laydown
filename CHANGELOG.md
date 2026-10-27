@@ -6,6 +6,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Integrazione diretta con il driver di stampa nativo e spooler GDI Windows:**
+  - **Bypass completo della finestra generica di Windows (`laydown/ui/win_print.py`):** il pulsante *"Proprietà driver…"* chiama direttamente l'API Winspool `DocumentPropertiesW` con flag `DM_IN_PROMPT`, aprendo istantaneamente la finestra nativa delle preferenze proprietarie del costruttore (HP, Canon, Lexmark, Xerox, Epson, ecc.), eliminando del tutto la finestra di dialogo generica di Windows con l'anteprima vuota.
+  - **Sincronizzazione forzata del formato A3 e orientamento nel DEVMODE del driver:** il formato carta scelto (A3 `dmPaperSize = 8`, A4, SRA3, Tabloid, ecc.), l'orientamento (orizzontale/verticale), il fronte/retro (duplex) e le copie configurati in Laydown vengono forzati direttamente nella struttura binaria `DEVMODE` del driver prima di aprire le preferenze e prima dell'invio allo spooler.
+  - **Spooling diretto Windows GDI (`CreateDCW` / `StretchDIBits`):** l'invio della stampa su Windows crea direttamente il Device Context (`WINSPOOL`) con il `DEVMODE` attivo configurato a 420 × 297 mm A3, bloccando alla radice il comportamento errato dei driver di stampa che forzavano la carta predefinita A4 con autoridimensionamento. I fogli vengono rasterizzati tramite PyMuPDF a risoluzione nativa (150 DPI per bozza rapida, 600/1200 DPI per produzione) e inviati con `StretchDIBits` compensando al millimetro i margini fisici non stampabili dei rulli.
+  - **Sincronizzazione bidirezionale tra driver e interfaccia:** le eventuali modifiche apportate dall'utente all'interno della finestra di configurazione nativa del driver (selezione cassetto, carta, orientamento, duplex, copie) vengono rilette al click su OK e riallineate istantaneamente sui controlli dell'anteprima di Laydown.
+  - **Badge visivo di conferma configurazione ottimale:** l'interfaccia mostra un avviso verde di conferma (*"Driver configurato: A3 — Stampa 1:1 a grandezza naturale (nessuna riduzione)"*) quando foglio imposto e carta della stampante combaciano, dando assoluta certezza all'operatore.
+  - Suite di test ampliata a 27 test specifici in `tests/test_print_dialog.py`.
+
 - **Procedura di stampa integrata e finestra professionale di anteprima di stampa:**
   - **Modulo dedicato di stampa (`laydown/ui/print_dialog.py`):** creata una finestra di dialogo completa per la stampa di produzione (`PrintDialog`), stilizzata in modo coerente con il dark theme OKLCH dell'applicazione (`laydown.ui.theme`).
   - **Doppia modalità di stampa: Bozza Veloce (150 DPI) e Alta Definizione (600/1200 DPI):**

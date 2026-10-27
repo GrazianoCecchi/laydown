@@ -297,3 +297,131 @@ class TestPrintDialogUI:
         )
         worker.cancel()
         assert worker._cancel is True
+
+
+# ── Windows Driver & WinPrint Integration Tests ────────────
+
+class TestWinPrintIntegration:
+    def test_map_qpagesize_to_dmpaper(self):
+        from laydown.ui import win_print
+        # A3
+        pid, _, _ = win_print.map_qpagesize_to_dmpaper(QPageSize(QPageSize.PageSizeId.A3))
+        assert pid == win_print.DMPAPER_A3
+
+        # A4
+        pid, _, _ = win_print.map_qpagesize_to_dmpaper(QPageSize(QPageSize.PageSizeId.A4))
+        assert pid == win_print.DMPAPER_A4
+
+        # Letter
+        pid, _, _ = win_print.map_qpagesize_to_dmpaper(QPageSize(QPageSize.PageSizeId.Letter))
+        assert pid == win_print.DMPAPER_LETTER
+
+        # Custom size
+        custom_ps = QPageSize(QPageSize.PageSizeId.Custom)
+        # None
+        pid, _, _ = win_print.map_qpagesize_to_dmpaper(None)
+        assert pid == win_print.DMPAPER_A4
+
+    def test_devmode_merge_and_parse_on_windows(self):
+        from laydown.ui import win_print
+        if not win_print.is_windows():
+            pytest.skip("Test requires Windows winspool")
+
+        from PyQt6.QtPrintSupport import QPrinterInfo
+        default_name = QPrinterInfo.defaultPrinterName()
+        if not default_name:
+            pytest.skip("No default printer found on system")
+
+        devmode = win_print.get_native_devmode(default_name)
+        if not devmode:
+            pytest.skip("Could not retrieve DEVMODE for default printer")
+
+        # Merge A3 Landscape
+        merged = win_print.merge_devmode(
+            printer_name=default_name,
+            in_devmode=devmode,
+            paper_size_id=win_print.DMPAPER_A3,
+            orientation=win_print.DMORIENT_LANDSCAPE,
+            copies=2,
+        )
+        assert merged is not None
+
+        settings = win_print.parse_devmode_settings(merged)
+        assert settings.get("orientation") == win_print.DMORIENT_LANDSCAPE
+        assert settings.get("copies") == 2
+
+    def test_sync_controls_from_devmode(self, app, sample_project, sample_pdf):
+        from laydown.ui import win_print
+        dlg = PrintDialog(project=sample_project, pdf_path=sample_pdf)
+        try:
+            # Create a mock devmode buffer
+            if win_print.is_windows() and win_print.DEVMODEW:
+                import ctypes
+                dev = win_print.DEVMODEW()
+                dev.dmSize = ctypes.sizeof(win_print.DEVMODEW)
+                dev.dmFields = win_print.DM_ORIENTATION | win_print.DM_PAPERSIZE | win_print.DM_COPIES | win_print.DM_DUPLEX
+                dev.dmOrientation = win_print.DMORIENT_LANDSCAPE
+                dev.dmPaperSize = win_print.DMPAPER_A4
+                dev.dmCopies = 3
+                dev.dmDuplex = win_print.DMDUP_VERTICAL
+
+                dlg._sync_controls_from_devmode(bytes(dev))
+
+                assert dlg._combo_orient.currentData() == "landscape"
+                assert dlg._spin_copies.value() == 3
+                assert dlg._combo_duplex.currentIndex() == 1  # Long side
+        finally:
+            dlg.close_document()
+            dlg.close()
+
+    def test_direct_gdi_spooling_to_pdf_on_windows(self, sample_pdf):
+        from laydown.ui import win_print
+        if not win_print.is_windows():
+            pytest.skip("Test requires Windows winspool")
+
+        from PyQt6.QtPrintSupport import QPrinterInfo
+        printers = [p.printerName() for p in QPrinterInfo.availablePrinters()]
+        if "Microsoft Print to PDF" not in printers:
+            pytest.skip("Microsoft Print to PDF not installed")
+
+        devmode = win_print.get_native_devmode("Microsoft Print to PDF")
+        if not devmode:
+            pytest.skip("Could not read DEVMODE for Microsoft Print to PDF")
+
+        devmode_a3 = win_print.merge_devmode(
+            printer_name="Microsoft Print to PDF",
+            in_devmode=devmode,
+            paper_size_id=win_print.DMPAPER_A3,
+            orientation=win_print.DMORIENT_LANDSCAPE,
+        )
+
+        fd, out_path = tempfile.mkstemp(suffix=".pdf")
+        os.close(fd)
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+
+        try:
+            win_print.print_pdf_direct_gdi(
+                printer_name="Microsoft Print to PDF",
+                devmode_bytes=devmode_a3,
+                doc_path=sample_pdf,
+                sheet_indices=[0],
+                scaling_mode="actual",
+                center=True,
+                resolution=150,
+                output_file=out_path,
+            )
+
+            assert os.path.exists(out_path)
+            res = fitz.open(out_path)
+            assert len(res) == 1
+            # Check dimensions match A3 Landscape (420 x 297 mm, tolerance 3mm)
+            w_mm = res[0].rect.width * 25.4 / 72.0
+            h_mm = res[0].rect.height * 25.4 / 72.0
+            assert abs(w_mm - 420.0) < 3.0
+            assert abs(h_mm - 297.0) < 3.0
+            res.close()
+        finally:
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+

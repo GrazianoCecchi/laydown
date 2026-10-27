@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 from laydown.engine.data_model import Project
 from laydown.engine.impose import impose_to_temp
 from laydown.ui import theme as t
+from laydown.ui import win_print
 from laydown.ui.icons import lucide
 
 
@@ -217,6 +218,9 @@ class _PrintWorker(QThread):
         resolution: int,
         page_size: Optional[QPageSize] = None,
         orientation: Optional[QPageLayout.Orientation] = None,
+        printer_name: Optional[str] = None,
+        devmode_bytes: Optional[bytes] = None,
+        project_name: str = "Progetto",
         parent=None,
     ):
         super().__init__(parent)
@@ -228,12 +232,38 @@ class _PrintWorker(QThread):
         self._resolution = resolution
         self._page_size = page_size
         self._orientation = orientation
+        self._printer_name = printer_name
+        self._devmode_bytes = devmode_bytes
+        self._project_name = project_name
         self._cancel = False
 
     def cancel(self):
         self._cancel = True
 
     def run(self):
+        # 1. Native Windows GDI spooler path if on Windows with valid DEVMODE
+        if win_print.is_windows() and self._devmode_bytes and self._printer_name:
+            try:
+                win_print.print_pdf_direct_gdi(
+                    printer_name=self._printer_name,
+                    devmode_bytes=self._devmode_bytes,
+                    doc_path=self._pdf_path,
+                    sheet_indices=self._sheet_indices,
+                    scaling_mode=self._scaling_mode,
+                    center=self._center,
+                    resolution=self._resolution,
+                    progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
+                    cancel_check=lambda: self._cancel,
+                    doc_name=f"Laydown - {self._project_name}",
+                )
+                if not self._cancel:
+                    self.finished_printing.emit()
+                return
+            except Exception as exc:
+                self.error.emit(f"Errore durante l'invio diretto al driver Windows: {exc}")
+                return
+
+        # 2. Standard Qt QPainter fallback for non-Windows (macOS, Linux) or tests
         doc = None
         try:
             doc = fitz.open(self._pdf_path)
@@ -368,6 +398,7 @@ class PrintDialog(QDialog):
         self._current_sheet_indices: List[int] = list(range(self._total_sheets))
         self._preset = getattr(getattr(self._project, "sheet", None), "preset", "A3")
         self._last_was_draft = False
+        self._active_devmode: Optional[bytes] = None
 
         self.setWindowTitle("Stampa — Laydown")
         self.resize(1120, 760)
@@ -375,6 +406,7 @@ class PrintDialog(QDialog):
 
         self._build_ui()
         self._sync_printer_to_controls()
+        self._update_active_devmode()
         self._update_overflow_warning()
 
     def _build_ui(self):
@@ -859,6 +891,7 @@ class PrintDialog(QDialog):
 
         self._combo_paper.blockSignals(False)
         self._update_orientation()
+        self._update_active_devmode()
         self._preview.updatePreview()
 
     def _on_printer_changed(self, index: int):
@@ -867,6 +900,7 @@ class PrintDialog(QDialog):
         printer_name = self._combo_printers.itemData(index)
         if printer_name:
             self._printer.setPrinterName(printer_name)
+            self._active_devmode = None
             self._sync_printer_to_controls()
             self._update_overflow_warning()
 
@@ -877,11 +911,13 @@ class PrintDialog(QDialog):
         if page_size:
             self._printer.setPageSize(page_size)
             self._update_orientation()
+            self._update_active_devmode()
             self._update_overflow_warning()
             self._preview.updatePreview()
 
     def _on_orientation_changed(self):
         self._update_orientation()
+        self._update_active_devmode()
         self._update_overflow_warning()
         self._preview.updatePreview()
 
@@ -901,10 +937,12 @@ class PrintDialog(QDialog):
         mode = self._combo_duplex.itemData(index)
         if mode is not None:
             self._printer.setDuplex(mode)
+            self._update_active_devmode()
 
     def _on_copies_changed(self, val: int):
         self._printer.setCopyCount(val)
         self._chk_collate.setEnabled(val > 1)
+        self._update_active_devmode()
 
     def _on_scale_mode_changed(self):
         self._update_overflow_warning()
@@ -1024,7 +1062,17 @@ class PrintDialog(QDialog):
             )
             self._warning_frame.setVisible(True)
         else:
-            self._warning_frame.setVisible(False)
+            paper_clean = paper_name.split("(")[0].strip()
+            self._wf_title.setText(f"Driver configurato: {paper_clean}")
+            self._wf_title.setStyleSheet(f"color: #10B981; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+            self._warning_frame.setStyleSheet(
+                f"background: {t.mix('#10B981', t.SURFACE, 0.15)};"
+                f"border: 1px solid #10B981; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+            )
+            self._wf_text.setText(
+                f"Il driver di stampa è impostato per {paper_clean} 1:1 a grandezza naturale (100% senza riduzioni)."
+            )
+            self._warning_frame.setVisible(True)
 
     # ── Preview Rendering (paintRequested) ────────────────────
 
@@ -1115,15 +1163,141 @@ class PrintDialog(QDialog):
         if cur < self._preview.pageCount():
             self._preview.setCurrentPage(cur + 1)
 
+    # ── Windows DEVMODE Synchronization ───────────────────────
+
+    def _update_active_devmode(self):
+        """Synchronize UI settings into active Windows DEVMODE."""
+        if not win_print.is_windows():
+            return
+
+        printer_name = self._combo_printers.currentData()
+        if not printer_name:
+            return
+
+        page_size = self._combo_paper.currentData()
+        paper_id, custom_w, custom_h = win_print.map_qpagesize_to_dmpaper(page_size)
+
+        orient_data = self._combo_orient.currentData()
+        if orient_data == "landscape":
+            orient_id = win_print.DMORIENT_LANDSCAPE
+        elif orient_data == "portrait":
+            orient_id = win_print.DMORIENT_PORTRAIT
+        else:  # "auto"
+            orient_id = win_print.DMORIENT_LANDSCAPE if self._sheet_w_pt > self._sheet_h_pt else win_print.DMORIENT_PORTRAIT
+
+        duplex_data = self._combo_duplex.currentData()
+        if duplex_data == QPrinter.DuplexMode.DuplexLongSide:
+            duplex_id = win_print.DMDUP_VERTICAL
+        elif duplex_data == QPrinter.DuplexMode.DuplexShortSide:
+            duplex_id = win_print.DMDUP_HORIZONTAL
+        else:
+            duplex_id = win_print.DMDUP_SIMPLEX
+
+        copies = self._spin_copies.value()
+        collate = self._chk_collate.isChecked()
+
+        merged = win_print.merge_devmode(
+            printer_name=printer_name,
+            in_devmode=self._active_devmode,
+            paper_size_id=paper_id,
+            orientation=orient_id,
+            duplex=duplex_id,
+            copies=copies,
+            collate=collate,
+            custom_width_mm=custom_w,
+            custom_height_mm=custom_h,
+        )
+        if merged:
+            self._active_devmode = merged
+
+    def _sync_controls_from_devmode(self, devmode_bytes: bytes):
+        """Update dialog controls when settings were modified inside native driver dialog."""
+        settings = win_print.parse_devmode_settings(devmode_bytes)
+        if not settings:
+            return
+
+        # 1. Paper size
+        paper_id = settings.get("paper_size")
+        target_name = None
+        if paper_id == win_print.DMPAPER_A3:
+            target_name = "A3"
+        elif paper_id == win_print.DMPAPER_A4:
+            target_name = "A4"
+        elif paper_id == win_print.DMPAPER_A5:
+            target_name = "A5"
+        elif paper_id in (win_print.DMPAPER_TABLOID, win_print.DMPAPER_LEDGER):
+            target_name = "Tabloid"
+
+        if target_name:
+            for idx in range(self._combo_paper.count()):
+                ps = self._combo_paper.itemData(idx)
+                if ps and (target_name in ps.name().upper() or target_name == getattr(ps.id(), "name", "")):
+                    self._combo_paper.blockSignals(True)
+                    self._combo_paper.setCurrentIndex(idx)
+                    self._printer.setPageSize(ps)
+                    self._combo_paper.blockSignals(False)
+                    break
+
+        # 2. Orientation
+        orient_id = settings.get("orientation")
+        self._combo_orient.blockSignals(True)
+        if orient_id == win_print.DMORIENT_LANDSCAPE:
+            idx = self._combo_orient.findData("landscape")
+            if idx >= 0:
+                self._combo_orient.setCurrentIndex(idx)
+            self._printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+        elif orient_id == win_print.DMORIENT_PORTRAIT:
+            idx = self._combo_orient.findData("portrait")
+            if idx >= 0:
+                self._combo_orient.setCurrentIndex(idx)
+            self._printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+        self._combo_orient.blockSignals(False)
+
+        # 3. Duplex
+        duplex_id = settings.get("duplex")
+        self._combo_duplex.blockSignals(True)
+        if duplex_id == win_print.DMDUP_VERTICAL:
+            self._combo_duplex.setCurrentIndex(1)
+            self._printer.setDuplex(QPrinter.DuplexMode.DuplexLongSide)
+        elif duplex_id == win_print.DMDUP_HORIZONTAL:
+            self._combo_duplex.setCurrentIndex(2)
+            self._printer.setDuplex(QPrinter.DuplexMode.DuplexShortSide)
+        elif duplex_id == win_print.DMDUP_SIMPLEX:
+            self._combo_duplex.setCurrentIndex(0)
+            self._printer.setDuplex(QPrinter.DuplexMode.DuplexNone)
+        self._combo_duplex.blockSignals(False)
+
+        # 4. Copies
+        copies = settings.get("copies", 1)
+        if copies > 0:
+            self._spin_copies.blockSignals(True)
+            self._spin_copies.setValue(copies)
+            self._printer.setCopyCount(copies)
+            self._chk_collate.setEnabled(copies > 1)
+            self._spin_copies.blockSignals(False)
+
     # ── Driver Properties Dialog ──────────────────────────────
 
     def _on_open_driver_properties(self):
-        dialog = QPrintDialog(self._printer, self)
-        dialog.setWindowTitle("Proprietà stampante")
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._sync_printer_to_controls()
-            self._update_overflow_warning()
-            self._preview.updatePreview()
+        if win_print.is_windows():
+            self._update_active_devmode()
+            printer_name = self._combo_printers.currentData()
+            if not printer_name:
+                return
+            hwnd = int(self.winId())
+            new_devmode = win_print.open_native_driver_dialog(hwnd, printer_name, self._active_devmode)
+            if new_devmode is not None:
+                self._active_devmode = new_devmode
+                self._sync_controls_from_devmode(new_devmode)
+                self._update_overflow_warning()
+                self._preview.updatePreview()
+        else:
+            dialog = QPrintDialog(self._printer, self)
+            dialog.setWindowTitle("Proprietà stampante")
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self._sync_printer_to_controls()
+                self._update_overflow_warning()
+                self._preview.updatePreview()
 
     # ── Print Execution ───────────────────────────────────────
 
@@ -1157,6 +1331,10 @@ class PrintDialog(QDialog):
         if selected_page_size:
             self._printer.setPageSize(selected_page_size)
         self._update_orientation()
+        self._update_active_devmode()
+
+        printer_name = self._combo_printers.currentData()
+        project_name = getattr(self._project, "name", "") or "Progetto"
 
         self._worker = _PrintWorker(
             printer=self._printer,
@@ -1167,6 +1345,9 @@ class PrintDialog(QDialog):
             resolution=resolution,
             page_size=selected_page_size,
             orientation=self._printer.pageLayout().orientation(),
+            printer_name=printer_name,
+            devmode_bytes=self._active_devmode,
+            project_name=project_name,
             parent=self,
         )
         self._worker.progress.connect(self._on_worker_progress)
