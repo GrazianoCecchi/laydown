@@ -80,7 +80,7 @@ class TestAutoRotate:
     def _placed_trim(self, src, auto_rotate, out_path):
         project = a_project(
             src, preset="A4", orientation=Orientation.PORTRAIT,
-            nup=2, auto_rotate=auto_rotate,
+            nup=2, auto_rotate=auto_rotate, scaling=PageScaling.FIT_TO_CELL,
         )
         return impose_detailed(project, out_path()).placed[0][0].trim
 
@@ -126,7 +126,7 @@ class TestAutoRotate:
         src = source_pdf(n_pages=2, w_mm=297, h_mm=210)
         out = out_path()
         impose(a_project(src, preset="A4", orientation=Orientation.PORTRAIT,
-                         nup=2, auto_rotate=True), out)
+                         nup=2, auto_rotate=True, scaling=PageScaling.FIT_TO_CELL), out)
         found = word_centers(fitz.open(out)[0])
         # The quarter turn puts the source's top edge down the left of the sheet: the
         # top-left corner lands bottom-left and the top-right corner lands top-left.

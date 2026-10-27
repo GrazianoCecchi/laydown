@@ -16,7 +16,7 @@ import re
 import fitz
 
 from laydown.engine.data_model import (
-    LayoutSettings, LayoutType, MarkItem, MarkType, Orientation, Project,
+    LayoutSettings, LayoutType, MarkItem, MarkType, Orientation, PageScaling, Project,
     SheetSettings, SourceBox, SourceSettings,
 )
 from laydown.engine.impose import impose, impose_detailed
@@ -124,7 +124,7 @@ class TestRegistrationColour:
         # What actually reaches paper: render the sheet and sample the pixel
         # under a known crop-mark segment.
         src = source_pdf(n_pages=2, w_mm=210, h_mm=297)
-        project = a_project(src, margin=12.0)
+        project = a_project(src, margin=12.0, scaling=PageScaling.FIT_TO_CELL)
         project.marks = [MarkItem(mark_type=MarkType.CROP_MARKS)]
         out = out_path()
         result = impose_detailed(project, out)

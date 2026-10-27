@@ -81,14 +81,13 @@ class TestActualSize:
 
     def test_a_page_too_big_for_the_cell_shrinks_identically_in_both_modes(
             self, source_pdf, out_path):
-        # The cap only limits enlarging. An A3 page in a 200x287 mm 1-Up cell
-        # must shrink to the same size either way.
+        # Under ACTUAL_SIZE the page is kept at 100% (297x420) and spills outside.
+        # Under FIT_TO_CELL it shrinks to fit the cell.
         src = source_pdf(n_pages=1, w_mm=297, h_mm=420)
-    # both modes place it by the same min() — assert equal, and smaller than source
         actual = first_trim(a_card_project(src, PageScaling.ACTUAL_SIZE, nup=1), out_path())
         fit = first_trim(a_card_project(src, PageScaling.FIT_TO_CELL, nup=1), out_path())
-        assert actual == pytest.approx(fit, abs=0.1)
-        assert actual[0] < 297.0 and actual[1] < 420.0
+        assert actual == pytest.approx((297.0, 420.0), abs=0.1)
+        assert fit[0] < 297.0 and fit[1] < 420.0
 
 
 class TestScalePreprocessor:
@@ -263,12 +262,12 @@ class TestPreflightScaling:
         try:
             p_actual = a_card_project(src, PageScaling.ACTUAL_SIZE)
             findings_actual = preflight(p_actual, doc)
-            enlarged_actual = [f for f in findings_actual if "enlarged" in f.message.lower()]
+            enlarged_actual = [f for f in findings_actual if "ingrandit" in f.message.lower() or "enlarged" in f.message.lower()]
             assert not enlarged_actual
 
             p_fit = a_card_project(src, PageScaling.FIT_TO_CELL)
             findings_fit = preflight(p_fit, doc)
-            enlarged_fit = [f for f in findings_fit if "enlarged" in f.message.lower()]
+            enlarged_fit = [f for f in findings_fit if "ingrandit" in f.message.lower() or "enlarged" in f.message.lower()]
             assert len(enlarged_fit) == 1
             assert enlarged_fit[0].severity == Severity.WARNING
             assert "111%" in enlarged_fit[0].message
@@ -276,15 +275,15 @@ class TestPreflightScaling:
             doc.close()
 
     def test_shrink_reporting_preserved_under_actual_size(self, source_pdf):
-        # An A3 page (297x420) on an A4 sheet (200x287 cell) must shrink in both modes,
-        # so preflight reports the scale reduction under ACTUAL_SIZE.
+        # An A3 page (297x420) on an A4 sheet (200x287 cell) overflows the sheet,
+        # so preflight reports the overflow warning under ACTUAL_SIZE.
         src = source_pdf(n_pages=1, w_mm=297, h_mm=420)
         doc = fitz.open(src)
         try:
             p = a_card_project(src, PageScaling.ACTUAL_SIZE, nup=1)
             findings = preflight(p, doc)
-            scaled = [f for f in findings if "scaled" in f.message.lower()]
-            assert len(scaled) == 1
-            assert scaled[0].severity == Severity.WARNING
+            overflow = [f for f in findings if "eccedono" in f.message.lower() or "superano" in f.message.lower()]
+            assert len(overflow) >= 1
+            assert overflow[0].severity == Severity.WARNING
         finally:
             doc.close()

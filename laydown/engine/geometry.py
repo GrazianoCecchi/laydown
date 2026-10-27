@@ -291,11 +291,10 @@ def step_and_repeat_grid(
 
     w_tot = cols * pw + (cols - 1) * gh
     h_tot = rows * ph + (rows - 1) * gv
-    if project.layout.scaling == PageScaling.FIT_TO_CELL or w_tot > avail_w + 0.1 or h_tot > avail_h + 0.1:
+    if project.layout.scaling == PageScaling.FIT_TO_CELL:
         scale = min(avail_w / max(1e-6, w_tot), avail_h / max(1e-6, h_tot))
-        if project.layout.scaling == PageScaling.FIT_TO_CELL or scale < 1.0:
-            pw *= scale
-            ph *= scale
+        pw *= scale
+        ph *= scale
 
     total_w = cols * pw + (cols - 1) * gh
     total_h = rows * ph + (rows - 1) * gv
@@ -374,7 +373,14 @@ def place_page(
             rotate = 90
 
     pw, ph = (place.width, place.height) if rotate == 0 else (place.height, place.width)
-    trim = fitted_rect(cell, pw, ph, max_scale=1.0 if actual else math.inf)
+    if actual:
+        # Actual size: strictly keep 100% original dimensions (no shrinking or enlarging)
+        x0 = cell.x0 + (cell.width - pw) / 2
+        y0 = cell.y0 + (cell.height - ph) / 2
+        trim = fitz.Rect(x0, y0, x0 + pw, y0 + ph)
+    else:
+        # Fit to cell: scale to fit the cell in both directions
+        trim = fitted_rect(cell, pw, ph, max_scale=math.inf)
     if clip == place:
         return trim, trim, rotate
 

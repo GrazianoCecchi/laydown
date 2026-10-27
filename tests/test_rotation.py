@@ -20,6 +20,7 @@ from laydown.engine.data_model import (
     LayoutSettings,
     LayoutType,
     Orientation,
+    PageScaling,
     PreprocessorStep,
     PreprocessorType,
     Project,
@@ -61,11 +62,11 @@ def visual_trim_size(w_mm: float, h_mm: float, inset_mm: float, rotation: int):
     return tw, th
 
 
-def a_project(src: str, *, bleed_mm: float = 0.0, steps=None):
+def a_project(src: str, *, bleed_mm: float = 0.0, steps=None, scaling=PageScaling.FIT_TO_CELL):
     p = Project(source_pdf_path=src)
     p.source = SourceSettings(bleed_mm=bleed_mm)
     p.sheet = SheetSettings(preset="A3", orientation=Orientation.LANDSCAPE)
-    p.layout = LayoutSettings(layout_type=LayoutType.NUP, nup=2)
+    p.layout = LayoutSettings(layout_type=LayoutType.NUP, nup=2, scaling=scaling)
     p.preprocessors = steps or []
     return p
 

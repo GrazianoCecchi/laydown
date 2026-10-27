@@ -11,7 +11,7 @@ import fitz
 import pytest
 
 from laydown.engine.data_model import (
-    LayoutSettings, LayoutType, MarkItem, MarkType, Orientation, Project,
+    LayoutSettings, LayoutType, MarkItem, MarkType, Orientation, PageScaling, Project,
     SheetSettings, SourceBox, SourceSettings,
 )
 from laydown.engine.impose import impose
@@ -85,7 +85,7 @@ def _black_points(page):
 class TestNewMarks:
     def test_gap_crop_marks_reach_the_sheet_edge(self, source_pdf, out_path):
         src = source_pdf(n_pages=4)
-        project = a_project(src, nup=4)
+        project = a_project(src, nup=4, scaling=PageScaling.FIT_TO_CELL)
         project.marks = [MarkItem(mark_type=MarkType.GAP_CROP_MARKS)]
         out = out_path()
         impose(project, out)
@@ -214,8 +214,8 @@ class TestPreflight:
 
     def test_serious_scaling_down_is_warned_about(self, source_pdf):
         src = source_pdf(n_pages=4, w_mm=210, h_mm=297)
-        findings = self._findings(a_project(src, preset="A4", nup=4), src)
-        scaling = [f for f in findings if "scaled to" in f.message]
+        findings = self._findings(a_project(src, preset="A4", nup=4, scaling=PageScaling.FIT_TO_CELL), src)
+        scaling = [f for f in findings if "scaled to" in f.message or "ridimensionate" in f.message]
         assert scaling and scaling[0].severity is Severity.WARNING
 
     def test_the_canonical_job_is_not_warned_about(self, source_pdf):
@@ -223,37 +223,37 @@ class TestPreflight:
         # tool exists for; warning about it would teach the operator to ignore the
         # strip, so slight scaling is a note and only a real reduction is a warning.
         src = source_pdf(n_pages=4, w_mm=210, h_mm=297)
-        findings = self._findings(a_project(src), src)
+        findings = self._findings(a_project(src, scaling=PageScaling.FIT_TO_CELL), src)
         assert not [f for f in findings if f.severity is Severity.WARNING]
-        scaling = [f for f in findings if "scaled to" in f.message]
+        scaling = [f for f in findings if "scaled to" in f.message or "ridimensionate" in f.message]
         assert scaling and scaling[0].severity is Severity.NOTE
 
     def test_a_missing_trim_box_is_a_note_not_an_error(self, source_pdf):
         src = source_pdf(n_pages=2, trim_inset_mm=0)
         findings = self._findings(a_project(src), src)
-        notes = [f for f in findings if "no trim box" in f.message]
+        notes = [f for f in findings if "no trim box" in f.message or "TrimBox" in f.message]
         assert notes and notes[0].severity is Severity.NOTE
 
     def test_a_real_trim_box_produces_no_such_note(self, source_pdf):
         src = source_pdf(n_pages=2, trim_inset_mm=10)
         findings = self._findings(a_project(src), src)
-        assert not [f for f in findings if "no trim box" in f.message]
+        assert not [f for f in findings if "no trim box" in f.message or "TrimBox" in f.message]
 
     def test_bleed_beyond_the_artwork_is_warned_about(self, source_pdf):
         src = source_pdf(n_pages=2, trim_inset_mm=3)
         findings = self._findings(a_project(src, bleed=20.0), src)
-        warnings = [f for f in findings if "bleed" in f.message.lower()]
+        warnings = [f for f in findings if "bleed" in f.message.lower() or "abbondanza" in f.message.lower()]
         assert warnings and warnings[0].severity is Severity.WARNING
 
     def test_a_page_count_that_does_not_fold_is_noted(self, source_pdf):
         src = source_pdf(n_pages=6)
         findings = self._findings(a_project(src, layout_type=LayoutType.BOOKLET), src)
-        assert any("padded to 8" in f.message for f in findings)
+        assert any("padded to 8" in f.message or "completate a 8" in f.message for f in findings)
 
     def test_a_booklet_that_folds_exactly_is_not_noted(self, source_pdf):
         src = source_pdf(n_pages=8)
         findings = self._findings(a_project(src, layout_type=LayoutType.BOOKLET), src)
-        assert not [f for f in findings if "padded" in f.message]
+        assert not [f for f in findings if "padded" in f.message or "completate" in f.message]
 
     def test_mixed_page_sizes_are_warned_about(self, tmp_path):
         path = str(tmp_path / "mixed.pdf")
@@ -263,7 +263,7 @@ class TestPreflight:
         doc.save(path)
         doc.close()
         findings = self._findings(a_project(path), path)
-        assert any("different page sizes" in f.message for f in findings)
+        assert any("different page sizes" in f.message or "formati di pagina differenti" in f.message for f in findings)
 
     def test_findings_are_ordered_worst_first(self, source_pdf):
         src = source_pdf(n_pages=6, trim_inset_mm=0)

@@ -25,7 +25,7 @@ from tests.helpers import (
 
 def a_project(src, *, box=SourceBox.TRIM, bleed=0.0, preset="A3",
               orientation=Orientation.LANDSCAPE, nup=2, margin=5.0, marks=None,
-              scaling=PageScaling.ACTUAL_SIZE):
+              scaling=PageScaling.FIT_TO_CELL):
     p = Project(source_pdf_path=src)
     p.source = SourceSettings(box=box, bleed_mm=bleed)
     p.sheet = SheetSettings(
@@ -229,7 +229,7 @@ class TestGeometryUnits:
     def test_target_rect_returns_the_trim_not_the_cell(self):
         cell = fitz.Rect(0, 0, 100, 300)
         place = fitz.Rect(0, 0, 200, 200)
-        target, trim = target_rect(cell, place, place)
+        target, trim = target_rect(cell, place, place, scaling=PageScaling.FIT_TO_CELL)
         assert target == trim
         assert (trim.width, trim.height) == pytest.approx((100, 100))
         assert trim.y0 == pytest.approx(100)  # centred in the tall cell

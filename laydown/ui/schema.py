@@ -98,8 +98,8 @@ _LAYOUT_OPTIONS = (
 )
 
 _SCALING_OPTIONS = (
-    (PageScaling.ACTUAL_SIZE, "Dim. reale"),
-    (PageScaling.FIT_TO_CELL, "Adatta a cella"),
+    (PageScaling.ACTUAL_SIZE, "100% Reale"),
+    (PageScaling.FIT_TO_CELL, "Adatta foglio"),
 )
 
 _BOOKLET_MODE_OPTIONS = (
@@ -234,12 +234,12 @@ SCHEMA: Tuple[Tab, ...] = (
                     Control(
                         type=ControlType.SEGMENTED,
                         target="layout.scaling",
-                        label="Dimensione",
+                        label="Dimensione pagine",
                         default=PageScaling.ACTUAL_SIZE,
                         description=(
-                            "Dim. reale stampa ogni pagina al 100%, riducendola solo se non entra "
-                            "nella cella. Adatta a cella scala la pagina per riempire la cella, "
-                            "ingrandendo quelle più piccole."
+                            "Dim. reale (100%) mantiene le pagine alle loro dimensioni fisiche originali senza alcuna riduzione; "
+                            "se le pagine superano l'area disponibile sbordano dal foglio e viene mostrato un avviso. "
+                            "Adatta al foglio ridimensiona proporzionalmente le pagine per farle rientrare nella griglia utile del foglio."
                         ),
                         options=_SCALING_OPTIONS,
                     ),

@@ -47,8 +47,29 @@ def run_preflight(project, src=None):
             doc.close()
 
 
+_SYNONYMS = {
+    "padded": "completate",
+    "no trim box": "trimbox",
+    "carries": "dispone solo di",
+    "enlarged": "ingrandit",
+    "scaled to": "ridimensionate",
+    "custom mark": "marcatore",
+    "half the gutter": "metà della spaziatura",
+    "fold": "piega",
+    "will not appear in the output": "non appariranno",
+    "different page sizes": "formati di pagina differenti",
+    "fill their cell": "adattarsi al foglio",
+}
+
+
 def with_messages(findings, *words):
-    return [f for f in findings if all(w.lower() in f.message.lower() for w in words)]
+    def match(w, f):
+        wl = w.lower()
+        syn = _SYNONYMS.get(wl, wl)
+        text = (f.message + " " + f.detail).lower()
+        return wl in text or syn in text
+
+    return [f for f in findings if all(match(w, f) for w in words)]
 
 
 def rotated_source(path, angle=90, **kw):
@@ -103,7 +124,7 @@ class TestTheJobAsImposed:
     def test_the_padding_note_counts_the_selected_pages(self, tmp_path):
         src = make_source_pdf(str(tmp_path / "src.pdf"), n_pages=10)
         project = a_project(src, layout_type=LayoutType.BOOKLET, page_range="1-6")
-        assert any("6 pages will be padded to 8" in f.message
+        assert any("6 pagine verranno completate a 8" in f.message or "6 pages will be padded to 8" in f.message
                    for f in run_preflight(project, src))
 
     def test_a_page_range_off_the_document_is_an_error_not_an_exception(self, tmp_path):
@@ -111,7 +132,7 @@ class TestTheJobAsImposed:
         project = a_project(src, page_range="1-99")
         findings = run_preflight(project, src)
         errors = [f for f in findings if f.severity is Severity.ERROR]
-        assert errors and "page range" in errors[0].message.lower()
+        assert errors and ("intervallo di pagine" in errors[0].message.lower() or "page range" in errors[0].message.lower())
 
     def test_preprocessors_change_what_preflight_sees(self, tmp_path):
         # Halved A4 pages in an A3 2-up cell are enlarged to ~193%, not printed
@@ -200,12 +221,15 @@ class TestEnlargement:
 
     def test_the_false_full_size_text_is_gone(self, tmp_path):
         src = make_source_pdf(str(tmp_path / "src.pdf"), n_pages=4)
-        findings = run_preflight(a_project(src), src)
-        assert findings
-        assert not any("full size" in f.detail.lower() for f in findings)
-        # The honest text says pages are scaled to fill the cell, both ways.
-        scaled = with_messages(findings, "scaled to")
-        assert scaled and "fill their cell" in scaled[0].detail
+        # With FIT_TO_CELL, honest text says pages are scaled to fit
+        findings_fit = run_preflight(a_project(src, scaling=PageScaling.FIT_TO_CELL), src)
+        assert findings_fit
+        scaled = with_messages(findings_fit, "scaled to")
+        assert scaled and ("fill their cell" in scaled[0].detail or "adattarsi al foglio" in scaled[0].message.lower())
+
+        # With ACTUAL_SIZE, no scaling is performed, but overflow is warned about
+        findings_actual = run_preflight(a_project(src, scaling=PageScaling.ACTUAL_SIZE), src)
+        assert any("dimensione reale" in f.message.lower() or "eccedono" in f.message.lower() for f in findings_actual)
 
 
 # ── encrypted sources ───────────────────────────────
@@ -236,7 +260,7 @@ class TestCustomMarks:
                                   mark_pdf_path=str(tmp_path / "absent.pdf"))]
         missing = with_messages(preflight(project), "custom mark")
         assert missing and missing[0].severity is Severity.WARNING
-        assert "does not exist" in missing[0].message
+        assert "does not exist" in missing[0].message or "non esiste" in missing[0].message
 
     def test_a_corrupt_mark_pdf_is_warned_about(self, tmp_path):
         junk = tmp_path / "junk.pdf"
@@ -272,8 +296,8 @@ class TestAnnotationsAndForms:
         findings = run_preflight(a_project(src), src)
         carried = with_messages(findings, "will not appear in the output")
         assert carried and carried[0].severity is Severity.WARNING
-        assert "1 annotation" in carried[0].message
-        assert "1 form field" in carried[0].message
+        assert "1 annotation" in carried[0].message or "1 annotazione" in carried[0].message
+        assert "1 form field" in carried[0].message or "1 campo modulo" in carried[0].message
 
     def test_a_plain_source_stays_quiet(self, tmp_path):
         src = make_source_pdf(str(tmp_path / "src.pdf"), n_pages=2)

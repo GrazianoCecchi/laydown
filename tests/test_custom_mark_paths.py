@@ -104,14 +104,14 @@ class TestPreflight:
     @pytest.mark.parametrize("path", NETWORK_PATHS)
     def test_preflight_warns_without_touching_it(self, no_network_touch, path):
         findings = preflight(a_project("", path))
-        network = [f for f in findings if "network location" in f.message]
+        network = [f for f in findings if "network location" in f.message or "percorso di rete" in f.message]
         assert len(network) == 1
         assert network[0].severity == Severity.WARNING
-        assert "copy it to this computer" in network[0].message
+        assert "copy it to this computer" in network[0].message or "copialo su questo computer" in network[0].message
         assert no_network_touch == []
 
     def test_a_missing_local_mark_is_still_reported_as_missing(self, tmp_path):
         findings = preflight(a_project("", str(tmp_path / "gone.pdf")))
         messages = [f.message for f in findings]
-        assert any("does not exist" in m for m in messages)
-        assert not any("network location" in m for m in messages)
+        assert any("does not exist" in m or "non esiste" in m for m in messages)
+        assert not any("network location" in m or "percorso di rete" in m for m in messages)

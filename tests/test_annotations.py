@@ -9,6 +9,7 @@ import pytest
 from laydown.engine.data_model import (
     LayoutSettings,
     Orientation,
+    PageScaling,
     PreprocessorStep,
     PreprocessorType,
     Project,
@@ -99,7 +100,7 @@ class TestAnnotationBaking:
 
         project = Project(source_pdf_path=src)
         project.sheet = SheetSettings(preset="A4", orientation=Orientation.PORTRAIT)
-        project.layout = LayoutSettings(nup=1, rows=1, cols=1)
+        project.layout = LayoutSettings(nup=1, rows=1, cols=1, scaling=PageScaling.FIT_TO_CELL)
 
         # Preflight check
         with fitz.open(src) as doc:
@@ -107,16 +108,16 @@ class TestAnnotationBaking:
 
         note_findings = [
             f for f in findings
-            if f.severity is Severity.NOTE and "flattened" in f.message
+            if f.severity is Severity.NOTE and ("flattened" in f.message or "incorporate" in f.message)
         ]
         warn_findings = [
             f for f in findings
             if f.severity is Severity.WARNING
-            and ("annotation" in f.message or "form field" in f.message)
+            and ("annotation" in f.message or "form field" in f.message or "annotazion" in f.message)
         ]
 
         assert len(note_findings) == 1
-        assert "2 annotations and 1 form field" in note_findings[0].message
+        assert "2 annotations and 1 form field" in note_findings[0].message or "2 annotazioni e 1 campo modulo" in note_findings[0].message
         assert len(warn_findings) == 0
 
         # Impose check
@@ -139,18 +140,18 @@ class TestAnnotationBaking:
 
         project = Project(source_pdf_path=src)
         project.sheet = SheetSettings(preset="A4", orientation=Orientation.PORTRAIT)
-        project.layout = LayoutSettings(nup=1, rows=1, cols=1)
+        project.layout = LayoutSettings(nup=1, rows=1, cols=1, scaling=PageScaling.FIT_TO_CELL)
 
         with fitz.open(src) as doc:
             findings = preflight(project, doc)
 
         assert any(
-            f.severity is Severity.NOTE and "flattened" in f.message
+            f.severity is Severity.NOTE and ("flattened" in f.message or "incorporate" in f.message)
             for f in findings
         )
         assert not any(
             f.severity is Severity.WARNING
-            and ("annotation" in f.message or "form field" in f.message)
+            and ("annotation" in f.message or "form field" in f.message or "annotazion" in f.message)
             for f in findings
         )
 
@@ -170,7 +171,7 @@ class TestAnnotationBaking:
 
         project = Project(source_pdf_path=src)
         project.sheet = SheetSettings(preset="A4", orientation=Orientation.PORTRAIT)
-        project.layout = LayoutSettings(nup=1, rows=1, cols=1)
+        project.layout = LayoutSettings(nup=1, rows=1, cols=1, scaling=PageScaling.FIT_TO_CELL)
 
         impose(project, out)
         words = _page_words(out)
@@ -186,7 +187,7 @@ class TestAnnotationBaking:
 
         project = Project(source_pdf_path=src)
         project.sheet = SheetSettings(preset="A4", orientation=Orientation.PORTRAIT)
-        project.layout = LayoutSettings(nup=1, rows=1, cols=1)
+        project.layout = LayoutSettings(nup=1, rows=1, cols=1, scaling=PageScaling.FIT_TO_CELL)
 
         impose(project, out)
         words = _page_words(out)
@@ -202,7 +203,7 @@ class TestAnnotationBaking:
 
         project = Project(source_pdf_path=src)
         project.sheet = SheetSettings(preset="A4", orientation=Orientation.PORTRAIT)
-        project.layout = LayoutSettings(nup=1, rows=1, cols=1)
+        project.layout = LayoutSettings(nup=1, rows=1, cols=1, scaling=PageScaling.FIT_TO_CELL)
 
         impose(project, out)
         words = _page_words(out)
@@ -244,9 +245,9 @@ class TestAnnotationBaking:
         project.layout.page_range = "1"
         with fitz.open(src) as d:
             findings = preflight(project, d)
-        assert not any("flattened" in f.message for f in findings)
+        assert not any("flattened" in f.message or "incorporate" in f.message for f in findings)
 
         project.layout.page_range = "1-2"
         with fitz.open(src) as d:
             findings = preflight(project, d)
-        assert any("flattened" in f.message for f in findings)
+        assert any("flattened" in f.message or "incorporate" in f.message for f in findings)

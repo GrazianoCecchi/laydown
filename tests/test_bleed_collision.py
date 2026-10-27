@@ -17,6 +17,7 @@ from laydown.engine.data_model import (
     LayoutSettings,
     LayoutType,
     Orientation,
+    PageScaling,
     Project,
     SheetSettings,
     SourceBox,
@@ -82,7 +83,7 @@ def colour_source(path, n_pages, w_mm, h_mm, bleed_mm, bands=None):
 
 
 def a_project(src, *, layout, bleed=3.0, preset="A4",
-              orientation=Orientation.LANDSCAPE, margin=0.0):
+              orientation=Orientation.LANDSCAPE, margin=0.0, scaling=PageScaling.FIT_TO_CELL):
     project = Project(source_pdf_path=src)
     project.source = SourceSettings(box=SourceBox.TRIM, bleed_mm=bleed)
     project.sheet = SheetSettings(
@@ -90,6 +91,8 @@ def a_project(src, *, layout, bleed=3.0, preset="A4",
         margin_left_mm=margin, margin_right_mm=margin,
         margin_top_mm=margin, margin_bottom_mm=margin,
     )
+    if layout.scaling == PageScaling.ACTUAL_SIZE and scaling != PageScaling.ACTUAL_SIZE:
+        layout.scaling = scaling
     project.layout = layout
     return project
 

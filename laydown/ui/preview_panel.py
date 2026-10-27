@@ -152,27 +152,38 @@ def draw_overlays(
 
     # 2. Imposition cells
     if cells:
+        img_w, img_h = float(image.width()), float(image.height())
         for c in cells:
             px0, py0 = c.x0 * scale, c.y0 * scale
             pw, ph = (c.x1 - c.x0) * scale, (c.y1 - c.y0) * scale
             rect = QRectF(px0, py0, pw, ph)
+
+            # Detect if cell overflows the sheet boundaries
+            is_overflow = (px0 < -1.0 or py0 < -1.0 or (px0 + pw) > img_w + 1.0 or (py0 + ph) > img_h + 1.0)
+            cell_color = QColor(239, 68, 68) if is_overflow else MAGENTA
 
             if not show_previews:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor(245, 245, 245))
                 painter.drawRect(rect)
 
+            # If overflow, highlight the cell with a soft warning tint
+            if is_overflow:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(239, 68, 68, 20))
+                painter.drawRect(rect)
+
             if show_frames and c.page_num > 0:
                 painter.setBrush(Qt.BrushStyle.NoBrush)
-                pen = QPen(MAGENTA, max(1.0, scale * 0.5))
-                if c.is_placeholder:
+                pen = QPen(cell_color, max(1.5, scale * 0.6))
+                if c.is_placeholder or is_overflow:
                     pen.setStyle(Qt.PenStyle.DashLine)
                 painter.setPen(pen)
                 painter.drawRect(rect)
 
             if show_tops and c.page_num > 0:
-                pen = QPen(MAGENTA, max(1.5, scale * 0.7))
-                if c.is_placeholder:
+                pen = QPen(cell_color, max(1.5, scale * 0.7))
+                if c.is_placeholder or is_overflow:
                     pen.setStyle(Qt.PenStyle.DashLine)
                 painter.setPen(pen)
                 painter.drawLine(QPointF(px0, py0), QPointF(px0 + pw, py0))
@@ -183,7 +194,7 @@ def draw_overlays(
                 fs = max(22, int(min(pw, ph) * 0.28))
                 f = QFont(t.FONT_FAMILY, fs)
                 painter.setFont(f)
-                painter.setPen(MAGENTA)
+                painter.setPen(cell_color)
                 label = f"{c.page_num}*" if c.is_placeholder else str(c.page_num)
                 painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 

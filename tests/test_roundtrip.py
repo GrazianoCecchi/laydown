@@ -11,7 +11,7 @@ import fitz
 import pytest
 
 from laydown.engine.data_model import (
-    Project, LayoutSettings, LayoutType, SheetSettings, Orientation,
+    Project, LayoutSettings, LayoutType, SheetSettings, Orientation, PageScaling,
 )
 from laydown.engine.impose import impose, booklet_page_order
 from laydown.engine.utils import mm_to_pt
@@ -37,7 +37,8 @@ def nup_cells(sheet_w, sheet_h, margins_pt, gh, gv, cols, rows, count):
 
 
 def a_project(src, *, nup=2, layout=LayoutType.NUP, preset="A3",
-              orientation=Orientation.LANDSCAPE, margin=5.0, gh=0.0, gv=0.0, page_range=""):
+              orientation=Orientation.LANDSCAPE, margin=5.0, gh=0.0, gv=0.0, page_range="",
+              scaling=PageScaling.FIT_TO_CELL):
     p = Project(source_pdf_path=src)
     p.sheet = SheetSettings(
         preset=preset, orientation=orientation,
@@ -46,6 +47,7 @@ def a_project(src, *, nup=2, layout=LayoutType.NUP, preset="A3",
     )
     p.layout = LayoutSettings(
         layout_type=layout, nup=nup, gutter_h_mm=gh, gutter_v_mm=gv, page_range=page_range,
+        scaling=scaling,
     )
     return p
 
