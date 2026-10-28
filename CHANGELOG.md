@@ -4,7 +4,7 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
-## [Unreleased]
+## [0.4.9] - 2026-10-28
 
 - **Gestione Completa delle Preimpostazioni (Catalogo Unico JSON, ComboBox Rapida nella Toolbar e Dialog Dedicati):**
   - **Archiviazione centralizzata in unico file JSON (`laydown/ui/presets.py`):** introdotto il nuovo `PresetManager` per la gestione di tutte le preimpostazioni in un unico file `presets.json` archiviato nella cartella dati dell'applicazione (`AppDataLocation` / `~/.laydown`), eliminando la necessità di cercare e gestire singoli file sparsi.

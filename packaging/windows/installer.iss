@@ -1,6 +1,6 @@
 ; Inno Setup script for Laydown
 #ifndef MyAppVersion
-#define MyAppVersion "0.4.8"
+#define MyAppVersion "0.4.9"
 #endif
 
 #define MyAppName "Laydown"
