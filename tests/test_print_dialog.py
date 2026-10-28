@@ -426,54 +426,44 @@ class TestWinPrintIntegration:
             if os.path.exists(out_path):
                 os.unlink(out_path)
 
-    def test_spool_mode_selection_and_description(self, app, sample_project, sample_pdf):
+    def test_print_dialog_quality_options(self, app, sample_project, sample_pdf):
         dlg = PrintDialog(project=sample_project, pdf_path=sample_pdf)
         try:
-            assert hasattr(dlg, "_combo_spool_mode")
-            assert dlg._combo_spool_mode.count() == 2
-
-            # Select Vector PostScript
-            v_idx = dlg._combo_spool_mode.findData("vector_ps")
-            assert v_idx >= 0
-            dlg._combo_spool_mode.setCurrentIndex(v_idx)
-            assert not dlg._combo_dpi.isEnabled()
-            assert "Vettoriale PostScript" in dlg._btn_print.text()
-            assert "vettoriale nativa" in dlg._lbl_spool_desc.text().lower()
-
-            # Select Raster GDI
-            g_idx = dlg._combo_spool_mode.findData("gdi_raster")
-            assert g_idx >= 0
-            dlg._combo_spool_mode.setCurrentIndex(g_idx)
-            assert dlg._combo_dpi.isEnabled()
-            assert "Raster GDI" in dlg._btn_print.text()
-            assert "rasterizzazione" in dlg._lbl_spool_desc.text().lower()
+            assert hasattr(dlg, "_combo_dpi")
+            assert dlg._combo_dpi.count() == 3
+            # Check 600 DPI exists
+            idx_600 = dlg._combo_dpi.findData(600)
+            assert idx_600 >= 0
+            # Check 1200 DPI exists
+            idx_1200 = dlg._combo_dpi.findData(1200)
+            assert idx_1200 >= 0
+            # Check Send to RIP button exists
+            assert hasattr(dlg, "_btn_send_rip")
+            assert "RIP" in dlg._btn_send_rip.text()
         finally:
             dlg.close_document()
 
-    def test_print_pdf_direct_vector_ps_output(self, sample_pdf):
-        fd, out_path = tempfile.mkstemp(suffix=".pdf")
-        os.close(fd)
-        if os.path.exists(out_path):
-            os.unlink(out_path)
+    def test_hot_folder_manager_and_dispatch(self, tmp_path, sample_pdf):
+        from laydown.ui.hot_folder import HotFolderManager
+        hf_dir = str(tmp_path / "roland_in")
+        os.makedirs(hf_dir, exist_ok=True)
 
-        try:
-            win_print.print_pdf_direct_vector_ps(
-                printer_name="",
-                devmode_bytes=None,
-                doc_path=sample_pdf,
-                sheet_indices=[0],
-                scaling_mode="actual",
-                center=True,
-                output_file=out_path,
-                page_size=QPageSize(QPageSize.PageSizeId.A4),
-            )
-            assert os.path.exists(out_path)
-            res = fitz.open(out_path)
-            assert len(res) == 1
-            # Verify drawings exist in vector output
-            assert len(res[0].get_drawings()) > 0
-            res.close()
-        finally:
-            if os.path.exists(out_path):
-                os.unlink(out_path)
+        # Add test hot folder
+        HotFolderManager.add_folder("Roland VersaWorks", hf_dir)
+        folders = HotFolderManager.get_folders()
+        assert any(f["name"] == "Roland VersaWorks" and f["path"] == hf_dir for f in folders)
+
+        # Dispatch sample pdf
+        dest = HotFolderManager.dispatch_pdf(
+            source_pdf_path=sample_pdf,
+            destination_folder=hf_dir,
+            job_name="Biglietti",
+            preset="A3",
+        )
+        assert os.path.exists(dest)
+        assert "Biglietti" in os.path.basename(dest)
+        assert os.path.dirname(dest) == hf_dir
+
+        # Cleanup
+        HotFolderManager.remove_folder("Roland VersaWorks")
 

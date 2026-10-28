@@ -50,3 +50,15 @@
   upgrade and the old cert trust doesn't carry over; the GitHub Pages URL moved (no redirect);
   repo URL redirects via GitHub. Old releases keep their PressReady artifact names — renaming
   published binaries would lie about what they are.
+
+## 2026-10-28 — Production Printing: Native Windows Driver vs Production RIP
+
+- **Two-pronged printing architecture:**
+  - **Windows Driver Channel (Office / Multifunction / Digital Presses):** High-definition
+    native GDI spooling (600 DPI default for production, 1200 DPI for ultra-fine details, 300 DPI draft)
+    using Windows Winspool `CreateDCW` with binary `DEVMODEW` synchronization (guaranteeing exact paper
+    size such as A3/SRA3 without driver fallback to A4) and MuPDF native C rendering (`page.get_pixmap`),
+    which strictly enforces vector `/BBox` and `clip` boundaries per cell, preventing bleed overflow.
+  - **Production RIP Channel (Roland VersaWorks, EFI Fiery, PRISMAsync, Caldera):** Direct
+    vector PDF dispatch to monitored Hot Folders via `HotFolderManager` and `SendToRipDialog`.
+    Industrial RIPs require pure ISO 32000 vector PDFs rather than Windows print spooler queues.

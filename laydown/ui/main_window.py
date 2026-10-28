@@ -310,6 +310,10 @@ class MainWindow(QMainWindow):
                                   shortcut=QKeySequence("Ctrl+P"),
                                   enabled=False, triggered=self._on_print)
         file_menu.addAction(self._act_print)
+
+        self._act_send_rip = QAction(mi("send"), "Invia a &RIP (Hot Folder)…", self,
+                                     enabled=False, triggered=self._on_send_to_rip)
+        file_menu.addAction(self._act_send_rip)
         file_menu.addSeparator()
         file_menu.addAction(QAction(mi("save_preset"), "Salva &predefinito…", self,
                                     triggered=self._on_save_preset))
@@ -776,7 +780,7 @@ class MainWindow(QMainWindow):
                 self._update_title()
                 for widget in (self._act_close, self._act_inspect, self._btn_inspect,
                                self._act_generate, self._generate,
-                               self._act_print, self._btn_print):
+                               self._act_print, self._btn_print, self._act_send_rip):
                     widget.setEnabled(False)
                 self._canvas.clear_all()
                 msg = "Questo PDF è protetto da password — rimuovi la password e aprilo di nuovo"
@@ -804,7 +808,7 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"{name} — {count} pagin{'a' if count == 1 else 'e'}")
         for widget in (self._act_close, self._act_inspect, self._btn_inspect,
                        self._act_generate, self._generate,
-                       self._act_print, self._btn_print):
+                       self._act_print, self._btn_print, self._act_send_rip):
             widget.setEnabled(True)
         self._add_recent(path)
         self._on_values_changed()
@@ -823,7 +827,7 @@ class MainWindow(QMainWindow):
         self._update_title()
         for widget in (self._act_close, self._act_inspect, self._btn_inspect,
                        self._act_generate, self._generate,
-                       self._act_print, self._btn_print):
+                       self._act_print, self._btn_print, self._act_send_rip):
             widget.setEnabled(False)
         self._canvas.clear_all()
         self._run_preflight()
@@ -977,6 +981,36 @@ class MainWindow(QMainWindow):
         if getattr(self, "_act_margins", None) and self._act_margins.isChecked():
             self._canvas.set_printable_margins(True, self._get_printer_margins_pt())
 
+    def _on_send_to_rip(self):
+        """Open Send to RIP dialog directly from the main window."""
+        if not self._source_path or not self._source_doc:
+            return
+        errors = [f for f in self._findings if f.severity == Severity.ERROR]
+        if errors:
+            if not self._is_offscreen():
+                QMessageBox.warning(
+                    self,
+                    "Preflight — Errori bloccanti",
+                    f"Impossibile procedere con l'invio al RIP: sono presenti errori di preflight bloccanti:\n\n{errors[0].message}",
+                )
+            return
+
+        from laydown.engine.impose import impose_to_temp
+        from laydown.ui.hot_folder import SendToRipDialog
+        project = self.build_project()
+        temp_pdf, _ = impose_to_temp(project)
+        try:
+            name = getattr(project, "name", "") or os.path.splitext(os.path.basename(self._source_path))[0]
+            preset = getattr(getattr(project, "sheet", None), "preset", "A3")
+            dlg = SendToRipDialog(pdf_path=temp_pdf, project_name=name, preset=preset, parent=self)
+            dlg.exec()
+        finally:
+            if temp_pdf and os.path.exists(temp_pdf):
+                try:
+                    os.unlink(temp_pdf)
+                except Exception:
+                    pass
+
     def export_to(self, path: str) -> bool:
         """Export the current project to *path* atomically.
 
@@ -998,6 +1032,7 @@ class MainWindow(QMainWindow):
         self._btn_print.setEnabled(False)
         self._act_generate.setEnabled(False)
         self._act_print.setEnabled(False)
+        self._act_send_rip.setEnabled(False)
         self._export.setup(project, path)
         self._export.start()
         return True
@@ -1015,6 +1050,7 @@ class MainWindow(QMainWindow):
         try:
             if self._progress:
                 self._progress.close()
+            pass
         except RuntimeError:
             pass
         self._progress = None
@@ -1023,6 +1059,7 @@ class MainWindow(QMainWindow):
         self._btn_print.setEnabled(has_source)
         self._act_generate.setEnabled(has_source)
         self._act_print.setEnabled(has_source)
+        self._act_send_rip.setEnabled(has_source)
 
     def _on_export_done(self, sheets, path):
         self._close_progress()

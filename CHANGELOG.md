@@ -6,13 +6,19 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
-- **Pipeline di Stampa Vettoriale PostScript nativa e selettore del motore di spooling (Fase 1):**
-  - **Emissione vettoriale PostScript pura senza rasterizzazione (`laydown/ui/win_print.py`):** introdotta la nuova funzione `print_pdf_direct_vector_ps`. Utilizza la pipeline vettoriale `QSvgRenderer` e `QPainter` su `QPrinter` per convertire ogni pagina impaginata in primitive vettoriali native (curve di Bézier, tracciati, font e crocini di registro a spessore nominale). Il driver PostScript della macchina da stampa riceve codice vettoriale PostScript Level 3 puro, delegando la rasterizzazione al processore hardware RIP della stampante (1200×1200 / 2400 DPI con screening di fabbrica) ed eliminando completamente file di spool bitmap giganti o sfocature da pixel.
-  - **Selettore del Motore di Stampa nel Print Dialog (`laydown/ui/print_dialog.py`):** aggiunto il nuovo gruppo *"Motore di Stampa"* con scelta intuitiva:
-    - `⚡ Vettoriale PostScript (Periferiche Pro & RIP)`: emissione vettoriale nativa per stampanti professionali (Ricoh, Canon, HP UPD PostScript, Konica Minolta, Xerox) e RIP di produzione. In questa modalità i DPI raster vengono disabilitati poiché la risoluzione ottica è gestita direttamente dall'hardware.
-    - `🖼️ Raster GDI (Alta Definizione — Universale)`: modalità bitmap ad alta definizione (300 / 600 / 1200 DPI) per stampanti standard senza interprete PostScript.
-  - **Pulsanti di azione e status dinamici:** i pulsanti di invio e i messaggi di avanzamento indicano esplicitamente la modalità selezionata (*"Stampa Alta Definizione (Vettoriale PostScript)"* vs *"Stampa Alta Definizione (Raster GDI)"*), garantendo trasparenza operativa.
-  - **Persistenza completa (`QSettings`):** la modalità del motore di stampa (`print/spool_mode`) viene memorizzata in modo permanente tra le sessioni.
+- **Architettura di Stampa Professionale a doppio canale (Driver Windows GDI ad Alta Risoluzione + Invia a RIP Hot Folder):**
+  - **Risoluzione definitiva del ritaglio dell'abbondanza (bleed) e del formato carta A3:**
+    - Identificata e risolta la causa radice per cui nelle stampe multi-posa (es. biglietti da visita con 2 mm di abbondanza) l'immagine di sfondo debordava coprendo i biglietti adiacenti: `QSvgRenderer` di Qt6 implementa le specifiche SVG Tiny 1.2 e ignora sistematicamente i tag `<clipPath>` contenenti matrici di trasformazione, dipingendo l'intero sfondo della pagina sorgente senza ritagliarlo al box di rifilo + abbondanza.
+    - Standardizzata la pipeline di stampa su driver Windows su `print_pdf_direct_gdi`: utilizza il motore C nativo di PyMuPDF (`page.get_pixmap()`), che rispetta rigorosamente i percorsi vettoriali di ritaglio (`clip`) per ciascuna cella impaginata secondo lo standard ISO 32000, eliminando alla radice ogni collisione di sfondo tra pose adiacenti.
+    - Sincronizzazione hardware a livello di sistema: la chiamata diretta a `CreateDCW` con iniezione del buffer binario `DEVMODE` proprietario garantisce che periferiche complesse (HP Universal Print Driver PostScript, multifunzione Ricoh, Canon) ricevano ed eseguano il comando di formato carta esatto (A3, SRA3, Tabloid), superando il bug del fallback ad A4 tipico dell'API generica `QPrinter`.
+  - **Integrazione Flusso di Produzione RIP & Hot Folder (`laydown/ui/hot_folder.py`):**
+    - Introdotto il nuovo modulo dedicato alla prestampa industriale per macchine da produzione (plotter Roland con VersaWorks, presse digitali Ricoh e Canon pilotate da EFI Fiery o PRISMAsync, Caldera, Onyx).
+    - `HotFolderManager`: gestione e persistenza delle cartelle monitorate (Hot Folders) dei vari RIP aziendali con memorizzazione dell'ultima cartella utilizzata in `QSettings`.
+    - Generazione automatica di nomi file di produzione parlanti con timestamp e indicazione del preset di formato (`JobName_YYYYMMDD_HHMMSS_A3.pdf`), prevenendo sovrascritture accidentali.
+    - Invio del PDF 100% vettoriale puro con TrimBox, BleedBox e crocini di registro esatti direttamente nella cartella di ingresso del RIP, preservando la rasterizzazione a cura dell'interprete hardware della macchina.
+  - **UI Print Dialog e Finestra Principale rifinite (`print_dialog.py` & `main_window.py`):**
+    - Aggiunto il pulsante *"🚀 Invia a RIP…"* nella barra delle azioni del Print Dialog e la corrispondente voce *"Invia a RIP (Hot Folder)…"* nel menu File di `MainWindow` con la nuova icona Lucide `send`.
+    - Sezione *"Qualità di Stampa"* semplificata e chiara: selezione immediata tra 600 DPI (Alta Definizione raccomandata per produzione), 1200 DPI (Massima Definizione per dettagli finissimi) e 300 DPI (Standard), affiancata dal pulsante rapido *"⚡ Bozza Veloce (150 DPI)"*.
 
 - **Imposizione professionale a Dimensione Reale (100% 1:1) di default ed evidenziazione sbordamento (Overflow):**
   - **Preservazione rigorosa della scala 1:1 originale (`laydown/engine/geometry.py`):** modificato il comportamento di default dell'imposizione. Il software non riduce né rimpicciolisce più arbitrariamente le pagine quando se ne inseriscono molte sul foglio o quando le pose eccedono i margini o il formato carta. Le pagine mantengono al 100% le loro dimensioni fisiche reali originali.

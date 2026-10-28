@@ -26,7 +26,6 @@ from PyQt6.QtGui import (
 from PyQt6.QtPrintSupport import (
     QPrintDialog, QPrinter, QPrinterInfo, QPrintPreviewWidget,
 )
-from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDialog, QFrame, QGraphicsView,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QProgressBar, QPushButton,
@@ -222,7 +221,6 @@ class _PrintWorker(QThread):
         printer_name: Optional[str] = None,
         devmode_bytes: Optional[bytes] = None,
         project_name: str = "Progetto",
-        spool_mode: str = "vector_ps",
         copies: int = 1,
         collate: bool = True,
         duplex: Optional[QPrinter.DuplexMode] = None,
@@ -240,7 +238,6 @@ class _PrintWorker(QThread):
         self._printer_name = printer_name
         self._devmode_bytes = devmode_bytes
         self._project_name = project_name
-        self._spool_mode = spool_mode
         self._copies = copies
         self._collate = collate
         self._duplex = duplex
@@ -250,39 +247,21 @@ class _PrintWorker(QThread):
         self._cancel = True
 
     def run(self):
-        # 1. Native Windows spooler path if on Windows with valid DEVMODE
+        # 1. Native Windows GDI spooler path if on Windows with valid DEVMODE
         if win_print.is_windows() and self._devmode_bytes and self._printer_name:
             try:
-                if self._spool_mode == "vector_ps":
-                    win_print.print_pdf_direct_vector_ps(
-                        printer_name=self._printer_name,
-                        devmode_bytes=self._devmode_bytes,
-                        doc_path=self._pdf_path,
-                        sheet_indices=self._sheet_indices,
-                        scaling_mode=self._scaling_mode,
-                        center=self._center,
-                        progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
-                        cancel_check=lambda: self._cancel,
-                        doc_name=f"Laydown - {self._project_name}",
-                        page_size=self._page_size,
-                        orientation=self._orientation,
-                        copies=self._copies,
-                        collate=self._collate,
-                        duplex=self._duplex,
-                    )
-                else:
-                    win_print.print_pdf_direct_gdi(
-                        printer_name=self._printer_name,
-                        devmode_bytes=self._devmode_bytes,
-                        doc_path=self._pdf_path,
-                        sheet_indices=self._sheet_indices,
-                        scaling_mode=self._scaling_mode,
-                        center=self._center,
-                        resolution=self._resolution,
-                        progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
-                        cancel_check=lambda: self._cancel,
-                        doc_name=f"Laydown - {self._project_name}",
-                    )
+                win_print.print_pdf_direct_gdi(
+                    printer_name=self._printer_name,
+                    devmode_bytes=self._devmode_bytes,
+                    doc_path=self._pdf_path,
+                    sheet_indices=self._sheet_indices,
+                    scaling_mode=self._scaling_mode,
+                    center=self._center,
+                    resolution=self._resolution,
+                    progress_cb=lambda cur, tot: self.progress.emit(cur, tot),
+                    cancel_check=lambda: self._cancel,
+                    doc_name=f"Laydown - {self._project_name}",
+                )
                 if not self._cancel:
                     self.finished_printing.emit()
                 return
@@ -336,37 +315,23 @@ class _PrintWorker(QThread):
                     scaling_mode=self._scaling_mode, center=self._center,
                 )
 
-                if self._spool_mode == "vector_ps":
-                    # Pure vector emission via QSvgRenderer
-                    svg_xml = page.get_svg_image()
-                    renderer = QSvgRenderer(QByteArray(svg_xml.encode("utf-8")))
-                    target_rect = QRectF(
-                        offset_x_pt * scale_px,
-                        offset_y_pt * scale_px,
-                        target_w_pt * scale_px,
-                        target_h_pt * scale_px,
-                    )
-                    if renderer.isValid():
-                        renderer.render(painter, target_rect)
-                else:
-                    # Raster GDI rendering at requested resolution
-                    matrix = fitz.Matrix(
-                        scale_px * (target_w_pt / sheet_w_pt),
-                        scale_px * (target_h_pt / sheet_h_pt),
-                    )
-                    pix = page.get_pixmap(matrix=matrix, alpha=False)
-                    img = QImage(
-                        pix.samples, pix.width, pix.height, pix.stride,
-                        QImage.Format.Format_RGB888,
-                    )
-                    target_rect_px = QRectF(
-                        offset_x_pt * scale_px,
-                        offset_y_pt * scale_px,
-                        float(pix.width),
-                        float(pix.height),
-                    )
-                    painter.drawImage(target_rect_px, img)
-                    del pix
+                matrix = fitz.Matrix(
+                    scale_px * (target_w_pt / sheet_w_pt),
+                    scale_px * (target_h_pt / sheet_h_pt),
+                )
+                pix = page.get_pixmap(matrix=matrix, alpha=False)
+                img = QImage(
+                    pix.samples, pix.width, pix.height, pix.stride,
+                    QImage.Format.Format_RGB888,
+                )
+                target_rect_px = QRectF(
+                    offset_x_pt * scale_px,
+                    offset_y_pt * scale_px,
+                    float(pix.width),
+                    float(pix.height),
+                )
+                painter.drawImage(target_rect_px, img)
+                del pix
 
             painter.end()
 
@@ -463,7 +428,6 @@ class PrintDialog(QDialog):
         self._sync_printer_to_controls()
         self._update_active_devmode()
         self._update_overflow_warning()
-        self._on_spool_mode_changed()
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -566,6 +530,13 @@ class PrintDialog(QDialog):
         self._btn_driver_props.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_driver_props.clicked.connect(self._on_open_driver_properties)
         bb_layout.addWidget(self._btn_driver_props)
+
+        self._btn_send_rip = QPushButton("  🚀 Invia a RIP…")
+        self._btn_send_rip.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_send_rip.setIcon(lucide("send", 16, t.FG))
+        self._btn_send_rip.setToolTip("Invia il PDF vettoriale puro direttamente alla Hot Folder del RIP (Roland VersaWorks, Fiery, ecc.)")
+        self._btn_send_rip.clicked.connect(self._on_send_to_rip)
+        bb_layout.addWidget(self._btn_send_rip)
 
         bb_layout.addSpacing(12)
 
@@ -803,35 +774,25 @@ class PrintDialog(QDialog):
 
         sidebar.addWidget(scale_card)
 
-        # 7. Motore di Stampa (Pipeline Vettoriale PostScript vs Raster GDI)
-        engine_card, eng_layout = self._create_section_card("Motore di Stampa")
-        self._combo_spool_mode = QComboBox()
-        self._combo_spool_mode.addItem("⚡ Vettoriale PostScript (Periferiche Pro & RIP)", "vector_ps")
-        self._combo_spool_mode.addItem("🖼️ Raster GDI (Alta Definizione — Universale)", "gdi_raster")
-        saved_spool_mode = self._settings.value("print/spool_mode", "vector_ps")
-        spool_idx = self._combo_spool_mode.findData(saved_spool_mode)
-        if spool_idx >= 0:
-            self._combo_spool_mode.setCurrentIndex(spool_idx)
-        self._combo_spool_mode.currentIndexChanged.connect(self._on_spool_mode_changed)
-        eng_layout.addWidget(self._combo_spool_mode)
-
-        self._lbl_spool_desc = QLabel()
-        self._lbl_spool_desc.setWordWrap(True)
-        self._lbl_spool_desc.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_2XS}px; margin-top: 2px;")
-        eng_layout.addWidget(self._lbl_spool_desc)
-        sidebar.addWidget(engine_card)
-
-        # 8. Risoluzione di Stampa (DPI per modalità Raster)
+        # 7. Qualità di Stampa
         dpi_card, dpi_layout = self._create_section_card("Qualità di Stampa")
         self._combo_dpi = QComboBox()
-        self._combo_dpi.addItem("300 DPI — Bozza veloce / Standard", 300)
-        self._combo_dpi.addItem("600 DPI — Alta qualità (Consigliato)", 600)
-        self._combo_dpi.addItem("1200 DPI — Massima definizione", 1200)
+        self._combo_dpi.addItem("600 DPI — Alta Definizione (Consigliato)", 600)
+        self._combo_dpi.addItem("1200 DPI — Massima Definizione (Dettagli fini)", 1200)
+        self._combo_dpi.addItem("300 DPI — Standard (Stampe veloci)", 300)
         saved_dpi = self._settings.value("print/resolution", 600, type=int)
         dpi_idx = self._combo_dpi.findData(saved_dpi)
-        self._combo_dpi.setCurrentIndex(dpi_idx if dpi_idx >= 0 else 1)
+        self._combo_dpi.setCurrentIndex(dpi_idx if dpi_idx >= 0 else 0)
         self._combo_dpi.currentIndexChanged.connect(lambda _: self._save_print_settings())
         dpi_layout.addWidget(self._combo_dpi)
+
+        dpi_desc = QLabel(
+            "Rendering nativo MuPDF ad altissima definizione con ritaglio esatto dell'abbondanza (bleed). "
+            "Invia direttamente al driver sul formato carta configurato (A3, A4, SRA3)."
+        )
+        dpi_desc.setWordWrap(True)
+        dpi_desc.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_2XS}px; margin-top: 3px;")
+        dpi_layout.addWidget(dpi_desc)
         sidebar.addWidget(dpi_card)
 
     # ── Preview Canvas Setup ───────────────────────────────────
@@ -1011,10 +972,6 @@ class PrintDialog(QDialog):
             dpi = self._combo_dpi.currentData()
             if dpi:
                 self._settings.setValue("print/resolution", dpi)
-            if hasattr(self, "_combo_spool_mode"):
-                spool_mode = self._combo_spool_mode.currentData()
-                if spool_mode:
-                    self._settings.setValue("print/spool_mode", spool_mode)
             duplex = self._combo_duplex.currentData()
             if duplex is not None:
                 val = duplex.value if hasattr(duplex, "value") else int(duplex)
@@ -1022,27 +979,17 @@ class PrintDialog(QDialog):
         except Exception:
             pass
 
-    def _on_spool_mode_changed(self):
-        if not hasattr(self, "_combo_spool_mode"):
-            return
-        mode = self._combo_spool_mode.currentData()
-        if mode == "vector_ps":
-            self._lbl_spool_desc.setText(
-                "Emissione vettoriale nativa: preserva curve Bézier, testi e segni di taglio originali al 100% "
-                "senza rasterizzazione bitmap. Ideale per stampanti PostScript (Ricoh, Canon, HP) e RIP."
-            )
-            self._combo_dpi.setEnabled(False)
-            self._combo_dpi.setToolTip("In modalità vettoriale la risoluzione è gestita direttamente dall'hardware RIP della macchina.")
-            self._btn_print.setText("  🖨️ Stampa Alta Definizione (Vettoriale PostScript)")
-        else:
-            self._lbl_spool_desc.setText(
-                "Rasterizzazione pre-spooling ad alta definizione. Invia bitmap DIB tramite il sottosistema Windows GDI. "
-                "Consigliata per stampanti standard senza interprete PostScript."
-            )
-            self._combo_dpi.setEnabled(True)
-            self._combo_dpi.setToolTip("Risoluzione bitmap di rendering GDI")
-            self._btn_print.setText("  🖨️ Stampa Alta Definizione (Raster GDI)")
-        self._save_print_settings()
+    def _on_send_to_rip(self):
+        """Open Send to RIP dialog for sending pure vector PDF to hot folders."""
+        from laydown.ui.hot_folder import SendToRipDialog
+        project_name = getattr(self._project, "name", "") or "Progetto"
+        dlg = SendToRipDialog(
+            pdf_path=self._pdf_path,
+            project_name=project_name,
+            preset=self._preset,
+            parent=self,
+        )
+        dlg.exec()
 
     def _on_printer_changed(self, index: int):
         if index < 0:
@@ -1509,14 +1456,8 @@ class PrintDialog(QDialog):
         self._progress_bar.setValue(0)
         self._progress_bar.setMaximum(len(self._current_sheet_indices))
 
-        spool_mode = "gdi_raster" if draft else (self._combo_spool_mode.currentData() or "vector_ps")
         resolution = 150 if draft else (self._combo_dpi.currentData() or 600)
-        if draft:
-            label_mode = "bozza veloce (150 DPI)"
-        elif spool_mode == "vector_ps":
-            label_mode = "vettoriale PostScript nativo"
-        else:
-            label_mode = f"raster GDI ({resolution} DPI)"
+        label_mode = "bozza veloce (150 DPI)" if draft else f"alta definizione ({resolution} DPI)"
         self._status_lbl.setText(f"Invio {label_mode} in corso…")
 
         scaling_mode = self._combo_scale.currentData()
@@ -1547,7 +1488,6 @@ class PrintDialog(QDialog):
             printer_name=printer_name,
             devmode_bytes=self._active_devmode,
             project_name=project_name,
-            spool_mode=spool_mode,
             copies=copies,
             collate=collate,
             duplex=duplex,
@@ -1560,12 +1500,7 @@ class PrintDialog(QDialog):
 
     def _on_worker_progress(self, current: int, total: int):
         self._progress_bar.setValue(current)
-        if self._last_was_draft:
-            mode_str = "Bozza"
-        elif getattr(self._worker, "_spool_mode", "") == "vector_ps":
-            mode_str = "Vettoriale PostScript"
-        else:
-            mode_str = "Raster GDI"
+        mode_str = "Bozza (150 DPI)" if self._last_was_draft else f"Alta Definizione ({getattr(self._worker, '_resolution', 600)} DPI)"
         self._status_lbl.setText(f"Spooling {mode_str}: foglio {current} di {total}…")
 
     def _on_worker_finished(self):
@@ -1574,12 +1509,7 @@ class PrintDialog(QDialog):
         self._btn_print_draft.setEnabled(True)
         self._btn_cancel.setText("Chiudi")
         total = len(self._current_sheet_indices)
-        if self._last_was_draft:
-            mode_str = "Bozza veloce"
-        elif getattr(self._worker, "_spool_mode", "") == "vector_ps":
-            mode_str = "Vettoriale PostScript (100% puro)"
-        else:
-            mode_str = f"Raster GDI ({self._combo_dpi.currentData() or 600} DPI)"
+        mode_str = "Bozza veloce (150 DPI)" if self._last_was_draft else f"Alta definizione ({self._combo_dpi.currentData() or 600} DPI)"
         self._status_lbl.setText(
             f"✅ Stampa completata ({mode_str}): {total} fogli{'o' if total == 1 else ''} inviati allo spooler."
         )

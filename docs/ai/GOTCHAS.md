@@ -134,6 +134,19 @@
   `sync_from_store` about it. A test enforces that every control is resyncable.
 - Watch for local names shadowing `theme as t` (`for t in ...` cost an hour).
 
+## Printing & Spooling traps
+- **`QSvgRenderer` silently ignores transformed `<clipPath>` elements:** Qt6's `QSvgRenderer`
+  implements SVG Tiny 1.2 and drops `<clipPath>` tags containing transformation matrices.
+  When spooling an imposed sheet via `page.get_svg_image()`, MuPDF puts each card inside a
+  clipping path to bound bleed. `QSvgRenderer` ignored these clips, painting full uncropped
+  backgrounds that bled onto adjacent business cards. Solution: driver printing uses native
+  MuPDF GDI rendering (which strictly enforces vector clips), while production RIPs receive
+  pure vector PDF files via Hot Folders.
+- **HP Universal Print Driver (UPD) / PostScript falls back to A4 without binary DEVMODE:**
+  `QPrinter.setPageSize()` does not populate private driver structures (`dmDriverExtra`). Complex
+  print drivers ignore the public `dmPaperSize` and revert to default A4 unless the full binary
+  DEVMODE is passed to Winspool `CreateDCW`.
+
 ## Repo oddities
 - `framer-demo/` (an unrelated Framer Motion web demo) moved out of the repo on 2026-10-15 to
   `D:\Vibe Coding\FramerTest`. The other two

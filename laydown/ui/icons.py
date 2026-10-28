@@ -47,6 +47,7 @@ _GEOMETRY = {
     'about': '<circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" />',
     'inspect': '<circle cx="11" cy="11" r="8" /> <line x1="21" x2="16.65" y1="21" y2="16.65" />',
     'print': '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /> <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" /> <rect x="6" y="14" width="12" height="8" rx="1" />',
+    'send': '<path d="m22 2-7 20-4-9-9-4Z" /> <path d="M22 2 11 13" />',
     'printable_area': '<rect width="18" height="18" x="3" y="3" rx="2" /> <rect width="10" height="10" x="7" y="7" rx="1" stroke-dasharray="2 1.5" />',
 }
 
