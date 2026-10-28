@@ -138,6 +138,8 @@ def cell_grid(
     ml, mr, mt, mb = margins_pt(project)
     gh = mm_to_pt(project.layout.gutter_h_mm)
     gv = mm_to_pt(project.layout.gutter_v_mm)
+    off_x = mm_to_pt(getattr(project.sheet, "offset_h_mm", 0.0))
+    off_y = mm_to_pt(getattr(project.sheet, "offset_v_mm", 0.0))
 
     cell_w = (sheet_w - ml - mr - (cols - 1) * gh) / cols
     cell_h = (sheet_h - mt - mb - (rows - 1) * gv) / rows
@@ -147,8 +149,8 @@ def cell_grid(
     cells = []
     for i in range(cols * rows):
         col, row = i % cols, i // cols
-        x0 = ml + col * (cell_w + gh)
-        y0 = mt + row * (cell_h + gv)
+        x0 = ml + col * (cell_w + gh) + off_x
+        y0 = mt + row * (cell_h + gv) + off_y
         cells.append(fitz.Rect(x0, y0, x0 + cell_w, y0 + cell_h))
     return cells
 
@@ -251,6 +253,8 @@ def step_and_repeat_grid(
     ml, mr, mt, mb = margins_pt(project)
     gh = mm_to_pt(project.layout.gutter_h_mm)
     gv = mm_to_pt(project.layout.gutter_v_mm)
+    off_x = mm_to_pt(getattr(project.sheet, "offset_h_mm", 0.0))
+    off_y = mm_to_pt(getattr(project.sheet, "offset_v_mm", 0.0))
     avail_w = sheet_w - ml - mr
     avail_h = sheet_h - mt - mb
 
@@ -268,8 +272,8 @@ def step_and_repeat_grid(
         cells = []
         for i in range(cols * rows):
             col, row = i % cols, i // cols
-            x0 = ml + col * (cell_w + gh)
-            y0 = mt + row * (cell_h + gv)
+            x0 = ml + col * (cell_w + gh) + off_x
+            y0 = mt + row * (cell_h + gv) + off_y
             cells.append(fitz.Rect(x0, y0, x0 + cell_w, y0 + cell_h))
         return cells
 
@@ -299,8 +303,8 @@ def step_and_repeat_grid(
     total_w = cols * pw + (cols - 1) * gh
     total_h = rows * ph + (rows - 1) * gv
 
-    start_x = ml + (avail_w - total_w) / 2.0
-    start_y = mt + (avail_h - total_h) / 2.0
+    start_x = ml + (avail_w - total_w) / 2.0 + off_x
+    start_y = mt + (avail_h - total_h) / 2.0 + off_y
 
     cells = []
     for i in range(cols * rows):

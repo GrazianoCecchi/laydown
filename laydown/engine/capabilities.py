@@ -73,6 +73,8 @@ HONOURED: Set[str] = {
     "sheet.margin_bottom_mm",
     "sheet.margin_left_mm",
     "sheet.margin_right_mm",
+    "sheet.offset_h_mm",
+    "sheet.offset_v_mm",
 
     # Marks — engine/marks.draw_marks
     "marks",

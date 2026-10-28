@@ -6,6 +6,21 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [0.4.9] - 2026-10-28
 
+- **Compensazione Disallineamento Registro Fronte-Retro (Offset Orizzontale & Verticale con Indicatore Visivo):**
+  - **Supporto nel Data Model e Capabilities (`laydown/engine/data_model.py` & `capabilities.py`):**
+    - Aggiunti i parametri `offset_h_mm: float = 0.0` e `offset_v_mm: float = 0.0` alla classe `SheetSettings`.
+    - Registrati `"sheet.offset_h_mm"` e `"sheet.offset_v_mm"` in `HONOURED` con pieno tracciamento nel `ValueStore` e nelle preimpostazioni.
+  - **Calcolo Geometrico Deterministico (`laydown/engine/geometry.py`):**
+    - Applicato lo spostamento millimetrico su coordinate `(x0, y0)` sia nella griglia classica `cell_grid()` sia nella griglia a passo e ripetizione compatta `step_and_repeat_grid()`.
+    - Le pose e i relativi crocini di taglio calcolati in fase di imposizione (`impose.py`) si traslano con precisione al decimo di millimetro, consentendo di compensare lo sfasamento meccanico dei rulli di trascinamento carta tipico del fronte-retro (inserendo la metà della discrepanza misurata sul foglio stampato).
+  - **Controlli UI Dedicati nella Scheda Foglio (`laydown/ui/schema.py`):**
+    - Nuova sezione *"Compensazione fronte-retro"* con controlli numerici *Offset orizzontale (X)* e *Offset verticale (Y)* regolabili da -50.0 mm a +50.0 mm con risoluzione al decimo di millimetro (0.1 mm) e scorciatoia per azzeramento rapido.
+  - **Badge Sovraimpresso e Notifica sul Canvas di Anteprima (`laydown/ui/preview_panel.py`):**
+    - Quando uno dei due valori di offset è diverso da zero, il motore di rendering dell'anteprima disegna automaticamente in sovraimpressione nell'angolo in alto a destra del foglio un badge scuro ad alto contrasto con bordo cyan contenente i valori esatti in millimetri e frecce direzionali esplicite (`→` / `←` per X, `↓` / `↑` per Y).
+    - Il titolo del foglio sotto l'anteprima integra l'indicazione testuale dell'offset attivo (es. `(Offset: X +1.5 mm, Y -1.0 mm)`).
+  - **Suite di Test (`tests/test_offset.py`):**
+    - 5 nuovi test automatici a copertura di modello dati, capability guard, traslazione geometrica delle celle, corretta traslazione del PDF imposto in uscita e rendering del badge overlay su QImage.
+
 - **Formati Carta Tipografici e Digitali Professionali & Gestione Formati Personalizzati in JSON:**
   - **Ampliamento formati standard europei e da tipografia (`laydown/engine/data_model.py` & `laydown/ui/schema.py`):**
     - Integrati nativamente nel motore i formati professionali di prestampa: `A3+ / Super A3 (13×19")` (329 × 483 mm), `12×18"` (304.8 × 457.2 mm), `SRA1` (640 × 900 mm), `70×100 Tipografico` (700 × 1000 mm), `64×88` (640 × 880 mm), `B4` (250 × 353 mm), `B3` (353 × 500 mm), `B2` (500 × 707 mm), a fianco dei classici `A5, A4, SRA4, A3, SRA3, A2, SRA2, Letter, Legal, Tabloid`.

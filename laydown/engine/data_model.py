@@ -246,6 +246,10 @@ class SheetSettings:
     margin_left_mm: float = 5.0
     margin_right_mm: float = 5.0
 
+    # Duplex / front-back alignment offsets (mm)
+    offset_h_mm: float = 0.0  # Horizontal shift (+ right, - left)
+    offset_v_mm: float = 0.0  # Vertical shift (+ down, - up)
+
     def sheet_size_mm(self) -> Tuple[float, float]:
         """Return (w, h) in mm after applying orientation."""
         if self.preset == "Custom":

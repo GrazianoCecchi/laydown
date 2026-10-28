@@ -106,10 +106,57 @@ def cells_from_result(result: ImposeResult, sheet_idx: int) -> List[CellInfo]:
     ]
 
 
+def _draw_offset_overlay(
+    painter: QPainter,
+    img_w: float,
+    img_h: float,
+    scale: float,
+    off_h: float,
+    off_v: float,
+) -> None:
+    parts = []
+    if abs(off_h) > 0.01:
+        arrow_h = "→" if off_h > 0 else "←"
+        parts.append(f"{arrow_h} X: {off_h:+.1f} mm")
+    if abs(off_v) > 0.01:
+        arrow_v = "↓" if off_v > 0 else "↑"
+        parts.append(f"{arrow_v} Y: {off_v:+.1f} mm")
+    if not parts:
+        return
+    text = "Offset: " + "  ".join(parts)
+
+    fs = max(11, int(13 * scale))
+    font = QFont(t.FONT_FAMILY, fs, QFont.Weight.Bold)
+    painter.setFont(font)
+    fm = painter.fontMetrics()
+    text_w = fm.horizontalAdvance(text)
+    text_h = fm.height()
+
+    pad_x = 10 * scale
+    pad_y = 6 * scale
+    badge_w = text_w + pad_x * 2
+    badge_h = text_h + pad_y * 2
+
+    # Place in top-right corner with 14pt margin
+    x = img_w - badge_w - 14 * scale
+    y = 14 * scale
+    badge_rect = QRectF(x, y, badge_w, badge_h)
+
+    # Draw pill badge with accent border
+    painter.setPen(QPen(QColor(t.ACCENT), max(1.5, scale * 1.2)))
+    painter.setBrush(QColor(24, 24, 27, 230))
+    painter.drawRoundedRect(badge_rect, 6 * scale, 6 * scale)
+
+    # Text inside
+    painter.setPen(QColor("#FFFFFF"))
+    painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, text)
+
+
 def draw_overlays(
     image: QImage, cells: List[CellInfo], scale: float,
     show_tops: bool, show_numbers: bool, show_frames: bool, show_previews: bool,
     printable_margins: Optional[Tuple[float, float, float, float]] = None,
+    offset_mm: Optional[Tuple[float, float]] = None,
 ) -> QImage:
     """Paint overlay marks onto a QImage.
 
@@ -198,6 +245,12 @@ def draw_overlays(
                 label = f"{c.page_num}*" if c.is_placeholder else str(c.page_num)
                 painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
 
+    # 3. Front/Back Duplex Offset Indicator Overlay
+    if offset_mm:
+        off_h, off_v = offset_mm
+        if abs(off_h) > 0.01 or abs(off_v) > 0.01:
+            _draw_offset_overlay(painter, float(image.width()), float(image.height()), scale, off_h, off_v)
+
     painter.end()
     return image
 
@@ -265,10 +318,15 @@ class _RenderWorker(QThread):
                 img = QImage(pix.samples, pix.width, pix.height, pix.stride,
                              QImage.Format.Format_RGB888).copy()
                 cells = cells_from_result(result, i)
+                offset_mm = (
+                    getattr(self.project.sheet, "offset_h_mm", 0.0),
+                    getattr(self.project.sheet, "offset_v_mm", 0.0),
+                )
                 img = draw_overlays(img, cells, scale,
                                     self.show_tops, self.show_numbers,
                                     self.show_frames, self.show_previews,
-                                    printable_margins=self.printable_margins)
+                                    printable_margins=self.printable_margins,
+                                    offset_mm=offset_mm)
                 images.append(img)
 
             doc.close()
@@ -622,6 +680,16 @@ class SheetCanvas(QScrollArea):
 
             total_sheets = len(self._pixmaps)
             sheet_title = f"Foglio {i + 1} di {total_sheets}" if total_sheets > 1 else f"Foglio {i + 1}"
+            if self._project:
+                oh = getattr(self._project.sheet, "offset_h_mm", 0.0)
+                ov = getattr(self._project.sheet, "offset_v_mm", 0.0)
+                if abs(oh) > 0.01 or abs(ov) > 0.01:
+                    parts = []
+                    if abs(oh) > 0.01:
+                        parts.append(f"X {oh:+.1f}mm")
+                    if abs(ov) > 0.01:
+                        parts.append(f"Y {ov:+.1f}mm")
+                    sheet_title += f"  (Offset: {', '.join(parts)})"
             num = QLabel(sheet_title)
             num.setAlignment(Qt.AlignmentFlag.AlignCenter)
             num.setStyleSheet(
