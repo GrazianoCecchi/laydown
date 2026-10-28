@@ -6,6 +6,30 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [0.4.9] - 2026-10-28
 
+- **Ispezione Colore, Profili ICC, OutputIntents e Prestampa nel Dialogo Ispettore PDF:**
+  - **Motore di Ispezione Colore Headless (`laydown/engine/inspector.py`):**
+    - Nuovo motore di analisi cromatica ad alta precisione 100% Qt-free:
+      - `parse_icc_profile_bytes`: parser standard per header di profili ICC (dimensione, classe dispositivo, spazio colore, PCS, versione, intento di resa primario e lettura del tag `desc` in formato ASCII e v4 `mluc` UTF-16BE).
+      - `extract_output_intents`: estrazione di tutti i dizionari `OutputIntents` dal catalogo PDF (`/Type /OutputIntent`), inclusi identificatori di condizione (`FOGRA39`, `SWOP`, `GRACoL`), registro, descrizione e profili ICC incorporati in stream `DestOutputProfile`.
+      - `extract_pdfx_pdfa_conformance`: rilevamento delle conformità `PDF/X` (PDF/X-1a, PDF/X-3, PDF/X-4) e `PDF/A` da Info, Catalog, OutputIntents e metadati XMP.
+      - `extract_page_color`: analisi pagina per pagina di spazi colore (`DeviceCMYK`, `DeviceRGB`, `DeviceGray`), tinte piatte / separazioni (`/Separation` e `/DeviceN` con estrazione nome unescaped e spazio alternativo), immagini raster (con conteggio, risoluzione e profili associati), operatori vettoriali da content stream (`k/K`, `rg/RG`, `g/G`, `cs/CS`), sovrastampa (`OP/op/OPM`), blend mode e trasparenze.
+      - Aggregazione complessiva in `DocumentColorInspection` con determinazione dello spazio primario e flag `has_rgb_warning` per allerta prestampa.
+  - **Interfaccia a Schede nell'Ispettore PDF (`laydown/ui/inspector_dialog.py`):**
+    - Riorganizzazione del pannello di sinistra con `QTabWidget` moderno in tema scuro a 3 schede:
+      - **Riquadri & Geometria:** tabella dei 5 riquadri PDF (TrimBox, BleedBox, CropBox, MediaBox, ArtBox) con toggle interattivi e hover sincrono sul canvas.
+      - **Colore & Prestampa:**
+        - Banner preflight cromatico con stato immediato (verde per conformità CMYK/Spot, ambra in caso di elementi RGB con avviso di rischio conversione).
+        - Schede informative su Spazio Colore primario, Conformità PDF/X e PDF/A, Trasparenze e Sovrastampa.
+        - Riquadro degli OutputIntents con dettagli completi e profilo ICC di destinazione.
+        - Tabella delle Tinte Piatte / Separazioni con nome, spazio alternativo e pagine di utilizzo.
+        - Sezione dinamica che visualizza le caratteristiche cromatiche della pagina correntemente selezionata nel navigatore.
+      - **Proprietà & Metadati:** proprietà documentali (titolo, autore, produttore, date, crittografia).
+    - Badge riassuntivi rapidi nella barra di intestazione superiore per visualizzare a colpo d'occhio lo spazio colore e l'intento di resa del file caricato.
+  - **Nuova icona Lucide `palette` (`laydown/ui/icons.py`)** per la scheda colore.
+  - **Suite di Test (`tests/test_inspector.py` & `tests/test_inspector_ui.py`):**
+    - 3 nuovi test engine per OutputIntents, Spot Colors / CMYK, e RGB warning.
+    - Test di integrazione UI con navigazione tra pagine e verifica dell'aggiornamento dinamico delle statistiche colore.
+
 - **Compensazione Disallineamento Registro Fronte-Retro (Offset Orizzontale & Verticale con Indicatore Visivo):**
   - **Supporto nel Data Model e Capabilities (`laydown/engine/data_model.py` & `capabilities.py`):**
     - Aggiunti i parametri `offset_h_mm: float = 0.0` e `offset_v_mm: float = 0.0` alla classe `SheetSettings`.

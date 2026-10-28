@@ -118,3 +118,61 @@ def test_inspector_dialog_rendering_and_interaction(app, tmp_path):
 
     dialog.close()
     source_doc.close()
+
+
+def test_inspector_color_tab_integration(app, tmp_path):
+    doc_path = str(tmp_path / "color_doc.pdf")
+    doc = fitz.open()
+    p1 = doc.new_page(width=300, height=400)
+    # Add CMYK shape on page 1
+    s1 = p1.new_shape()
+    s1.draw_rect(fitz.Rect(10, 10, 50, 50))
+    s1.finish(fill=(0.2, 0.4, 0.6, 0.1))
+    s1.commit()
+
+    # Add OutputIntent
+    cat = doc.pdf_catalog()
+    oi_xref = doc.get_new_xref()
+    doc.update_object(oi_xref, """<<
+      /Type /OutputIntent
+      /S /GTS_PDFX
+      /OutputConditionIdentifier (FOGRA39)
+      /Info (Coated FOGRA39)
+    >>""")
+    doc.xref_set_key(cat, "OutputIntents", f"[{oi_xref} 0 R]")
+
+    # Page 2: RGB line
+    p2 = doc.new_page(width=300, height=400)
+    s2 = p2.new_shape()
+    s2.draw_line(fitz.Point(10, 10), fitz.Point(100, 100))
+    s2.finish(color=(1.0, 0, 0))
+    s2.commit()
+
+    doc.save(doc_path)
+    doc.close()
+
+    source_doc = fitz.open(doc_path)
+    dialog = PdfInspectorDialog(source_doc, doc_path)
+
+    # Check tab widget
+    assert hasattr(dialog, "_tabs_widget")
+    assert dialog._tabs_widget.count() == 3
+    assert dialog._tabs_widget.tabText(0) == "Riquadri"
+    assert dialog._tabs_widget.tabText(1) == "Colore"
+    assert dialog._tabs_widget.tabText(2) == "Metadati"
+
+    # Switch to Color tab
+    dialog._tabs_widget.setCurrentIndex(1)
+    assert dialog._tabs_widget.currentIndex() == 1
+
+    # Check page 1 stats
+    assert "CMYK" in dialog._lbl_pg_summary.text()
+
+    # Switch to page 2 (index 1)
+    dialog._on_next_page()
+    assert dialog._current_page_idx == 1
+    assert "RGB" in dialog._lbl_pg_summary.text()
+
+    dialog.close()
+    source_doc.close()
+

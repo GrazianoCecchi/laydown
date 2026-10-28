@@ -185,3 +185,99 @@ startxref
     assert vx1 - vx0 == pytest.approx(240.0)
     assert vy1 - vy0 == pytest.approx(156.0)
 
+
+def test_inspect_document_color_output_intents(tmp_path):
+    pdf_path = str(tmp_path / "output_intent.pdf")
+    doc = fitz.open()
+    doc.new_page(width=300, height=400)
+
+    cat = doc.pdf_catalog()
+    oi_xref = doc.get_new_xref()
+    doc.update_object(oi_xref, """<<
+      /Type /OutputIntent
+      /S /GTS_PDFX
+      /OutputCondition (FOGRA39)
+      /OutputConditionIdentifier (FOGRA39)
+      /RegistryName (http://www.color.org)
+      /Info (Coated FOGRA39 ISO 12647-2:2004)
+    >>""")
+    doc.xref_set_key(cat, "OutputIntents", f"[{oi_xref} 0 R]")
+    doc.save(pdf_path)
+    doc.close()
+
+    doc = fitz.open(pdf_path)
+    insp = inspect_document(doc, pdf_path)
+    doc.close()
+
+    assert insp.color is not None
+    assert len(insp.color.output_intents) == 1
+    oi = insp.color.output_intents[0]
+    assert oi.output_condition_identifier == "FOGRA39"
+    assert oi.output_condition == "FOGRA39"
+    assert oi.registry_name == "http://www.color.org"
+    assert "FOGRA39" in oi.info
+    assert "PDF/X" in insp.color.pdfx_conformance
+
+
+def test_inspect_document_spot_colors_and_cmyk_rgb(tmp_path):
+    pdf_path = str(tmp_path / "spots.pdf")
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=400)
+
+    # CMYK vector rect
+    shape = page.new_shape()
+    shape.draw_rect(fitz.Rect(10, 10, 50, 50))
+    shape.finish(fill=(0.2, 0.4, 0.6, 0.1))
+    shape.commit()
+
+    # Setup Spot Color in page resources
+    sep_xref = doc.get_new_xref()
+    doc.update_object(sep_xref, "[ /Separation /PANTONE#20185#20C /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 1 0.8 0] /N 1 >> ]")
+    cs_dict_xref = doc.get_new_xref()
+    doc.update_object(cs_dict_xref, f"<< /SpotRed {sep_xref} 0 R >>")
+    res_xref = doc.get_new_xref()
+    doc.update_object(res_xref, f"<< /ColorSpace {cs_dict_xref} 0 R >>")
+    doc.xref_set_key(page.xref, "Resources", f"{res_xref} 0 R")
+
+    doc.save(pdf_path)
+    doc.close()
+
+    doc = fitz.open(pdf_path)
+    insp = inspect_document(doc, pdf_path)
+    doc.close()
+
+    assert insp.color is not None
+    assert insp.color.has_cmyk is True
+    assert insp.color.has_spot is True
+    assert len(insp.color.spot_colors) == 1
+    assert insp.color.spot_colors[0].name == "PANTONE 185 C"
+    assert insp.color.spot_colors[0].alternate_space == "DeviceCMYK"
+    assert 1 in insp.color.spot_colors[0].pages
+    assert "CMYK" in insp.color.primary_color_space
+    assert "Tinte Piatte" in insp.color.primary_color_space
+
+
+def test_inspect_document_rgb_warning(tmp_path):
+    pdf_path = str(tmp_path / "rgb_doc.pdf")
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=400)
+
+    # Insert RGB vector line
+    shape = page.new_shape()
+    shape.draw_line(fitz.Point(10, 10), fitz.Point(100, 100))
+    shape.finish(color=(1.0, 0.0, 0.0))
+    shape.commit()
+
+    doc.save(pdf_path)
+    doc.close()
+
+    doc = fitz.open(pdf_path)
+    insp = inspect_document(doc, pdf_path)
+    doc.close()
+
+    assert insp.color is not None
+    assert insp.color.has_rgb is True
+    assert insp.color.has_rgb_warning is True
+    assert "RGB" in insp.color.primary_color_space
+
+

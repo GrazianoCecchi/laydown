@@ -12,13 +12,15 @@ from PyQt6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy, QSpinBox,
-    QSplitter, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget,
+    QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QToolTip, QVBoxLayout, QWidget,
 )
 
 import fitz
 
 from laydown.engine.inspector import (
-    BoxInfo, DocumentInspection, PageInspection, inspect_document,
+    BoxInfo, DocumentColorInspection, DocumentInspection, ICCProfileInfo,
+    OutputIntentInfo, PageColorInspection, PageInspection, SpotColorInfo,
+    inspect_document,
 )
 from laydown.ui import theme as t
 from laydown.ui.icons import lucide
@@ -394,11 +396,24 @@ class PdfInspectorDialog(QDialog):
         # Quick badges
         badges_layout = QHBoxLayout()
         badges_layout.setSpacing(8)
-        for label, val in [
+        header_badges = [
             ("Pagine", str(self._inspection.page_count)),
             ("Versione", self._inspection.pdf_version),
             ("Dimensione", self._inspection.file_size_formatted),
-        ]:
+        ]
+        color_insp = self._inspection.color
+        if color_insp:
+            cs_short = "CMYK" if (color_insp.has_cmyk and not color_insp.has_rgb) else ("Misto" if (color_insp.has_rgb and color_insp.has_cmyk) else ("RGB" if color_insp.has_rgb else "Grigi"))
+            if color_insp.has_spot:
+                cs_short += f" + {len(color_insp.spot_colors)} Spot"
+            header_badges.append(("Colore", cs_short))
+            if color_insp.output_intents:
+                oi_lbl = color_insp.output_intents[0].output_condition_identifier
+                header_badges.append(("Intento", oi_lbl))
+            elif color_insp.pdfx_conformance and "Nessuna" not in color_insp.pdfx_conformance:
+                header_badges.append(("Conformità", color_insp.pdfx_conformance))
+
+        for label, val in header_badges:
             b = QFrame()
             b.setStyleSheet(
                 f"background: {t.INPUT_BG}; border: 1px solid {t.BORDER_SOFT};"
@@ -526,7 +541,6 @@ class PdfInspectorDialog(QDialog):
 
         t_row.addStretch(1)
         bg_layout.addWidget(toggles_frame)
-        left_layout.addWidget(boxes_group)
 
         # 3. Document Metadata Accordion / Group
         meta_group = QGroupBox("Proprietà e Metadati Documento")
@@ -570,7 +584,63 @@ class PdfInspectorDialog(QDialog):
 
         meta_scroll.setWidget(meta_content)
         meta_layout.addWidget(meta_scroll)
-        left_layout.addWidget(meta_group, 1)
+
+        # Tabs for left panel
+        self._tabs_widget = QTabWidget()
+        tabs_style = f"""
+        QTabWidget::pane {{
+            border: 1px solid {t.BORDER};
+            border-radius: {t.RADIUS_MD}px;
+            background: {t.SURFACE};
+            top: -1px;
+        }}
+        QTabBar::tab {{
+            background: {t.RAISED};
+            color: {t.FG_MUTED};
+            border: 1px solid {t.BORDER};
+            border-bottom: none;
+            border-top-left-radius: {t.RADIUS_SM}px;
+            border-top-right-radius: {t.RADIUS_SM}px;
+            padding: 6px 12px;
+            margin-right: 3px;
+            font-size: {t.TEXT_XS}px;
+            font-weight: 500;
+        }}
+        QTabBar::tab:selected {{
+            background: {t.SURFACE};
+            color: {t.FG};
+            border-bottom: 2px solid {t.ACCENT};
+            font-weight: 600;
+        }}
+        QTabBar::tab:hover:!selected {{
+            background: {t.INPUT_BG};
+            color: {t.FG};
+        }}
+        """
+        self._tabs_widget.setStyleSheet(tabs_style)
+
+        # Tab 1: Riquadri
+        boxes_tab = QWidget()
+        boxes_tab_layout = QVBoxLayout(boxes_tab)
+        boxes_tab_layout.setContentsMargins(4, 6, 4, 4)
+        boxes_tab_layout.addWidget(boxes_group)
+        boxes_tab_layout.addStretch(1)
+
+        # Tab 2: Colore & Prestampa
+        color_tab = self._build_color_tab()
+
+        # Tab 3: Proprietà & Metadati
+        meta_tab = QWidget()
+        meta_tab_layout = QVBoxLayout(meta_tab)
+        meta_tab_layout.setContentsMargins(4, 6, 4, 4)
+        meta_tab_layout.addWidget(meta_group)
+        meta_tab_layout.addStretch(1)
+
+        self._tabs_widget.addTab(boxes_tab, lucide("inspect", 14), "Riquadri")
+        self._tabs_widget.addTab(color_tab, lucide("palette", 14), "Colore")
+        self._tabs_widget.addTab(meta_tab, lucide("sysdir", 14), "Metadati")
+
+        left_layout.addWidget(self._tabs_widget, 1)
 
         splitter.addWidget(left_widget)
 
@@ -647,6 +717,281 @@ class PdfInspectorDialog(QDialog):
     def _active_boxes_default(box_name: str) -> bool:
         return box_name in ("MediaBox", "CropBox", "BleedBox", "TrimBox")
 
+    def _build_color_tab(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
+
+        content = QWidget()
+        c_layout = QVBoxLayout(content)
+        c_layout.setContentsMargins(4, 4, 4, 4)
+        c_layout.setSpacing(10)
+
+        color_insp: Optional[DocumentColorInspection] = self._inspection.color
+
+        # 1. Preflight status banner
+        banner = QFrame()
+        if color_insp and color_insp.has_rgb_warning:
+            banner_bg = "rgba(245, 158, 11, 0.12)"
+            banner_border = "#F59E0B"
+            banner_fg = "#FBBF24"
+            banner_txt = "⚠️ <b>Attenzione colore per stampa:</b> rilevati elementi o immagini in spazio colore <b>RGB</b>. Potrebbero verificarsi conversioni colore in fase di stampa."
+        elif color_insp and (color_insp.has_cmyk or color_insp.has_spot):
+            banner_bg = "rgba(16, 185, 129, 0.12)"
+            banner_border = "#10B981"
+            banner_fg = "#34D399"
+            banner_txt = "✓ <b>Conforme per prestampa:</b> spazio colore <b>CMYK</b> e separazioni senza elementi RGB."
+        else:
+            banner_bg = "rgba(148, 163, 184, 0.12)"
+            banner_border = "#64748B"
+            banner_fg = "#94A3B8"
+            banner_txt = "ℹ️ Documento monocromatico o spazio colore generico."
+
+        banner.setStyleSheet(
+            f"background: {banner_bg}; border: 1px solid {banner_border};"
+            f"border-radius: {t.RADIUS_SM}px; padding: 6px 10px;"
+        )
+        b_row = QHBoxLayout(banner)
+        b_row.setContentsMargins(4, 4, 4, 4)
+        lbl_banner = QLabel(banner_txt)
+        lbl_banner.setWordWrap(True)
+        lbl_banner.setStyleSheet(f"color: {banner_fg}; font-size: {t.TEXT_2XS}px;")
+        b_row.addWidget(lbl_banner)
+        c_layout.addWidget(banner)
+
+        # 2. Document Overview Group
+        ov_group = QGroupBox("Panoramica Colore Documento")
+        ov_group.setStyleSheet(
+            f"QGroupBox {{ font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.FG};"
+            f"              border: 1px solid {t.BORDER}; border-radius: {t.RADIUS_MD}px;"
+            f"              margin-top: 10px; padding-top: 14px; background: {t.SURFACE}; }}"
+            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}"
+        )
+        ov_layout = QGridLayout(ov_group)
+        ov_layout.setContentsMargins(8, 8, 8, 8)
+        ov_layout.setSpacing(6)
+
+        primary_cs = color_insp.primary_color_space if color_insp else "—"
+        pdfx_str = color_insp.pdfx_conformance if color_insp else "—"
+        pdfa_str = color_insp.pdfa_conformance or "—" if color_insp else "—"
+        transp_str = "Presenti (Trasparenze / Blend Mode)" if (color_insp and color_insp.has_transparency) else "Nessuna trasparenza"
+        overp_str = "Attiva (OP / Sovrastampa)" if (color_insp and color_insp.has_overprint) else "Non impostata"
+        spaces_str = ", ".join(color_insp.color_spaces_detected) if (color_insp and color_insp.color_spaces_detected) else "—"
+
+        ov_fields = [
+            ("Spazio primario", primary_cs),
+            ("Conformità PDF/X", pdfx_str),
+            ("Conformità PDF/A", pdfa_str),
+            ("Trasparenze", transp_str),
+            ("Sovrastampa", overp_str),
+            ("Spazi rilevati", spaces_str),
+        ]
+
+        for r, (label, val) in enumerate(ov_fields):
+            lbl_w = QLabel(f"{label}:")
+            lbl_w.setStyleSheet(f"color: {t.FG_MUTED}; font-size: {t.TEXT_XS}px; font-weight: 500;")
+            lbl_w.setFixedWidth(115)
+            val_w = QLabel(val)
+            val_w.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_XS}px;")
+            val_w.setWordWrap(True)
+            ov_layout.addWidget(lbl_w, r, 0, Qt.AlignmentFlag.AlignTop)
+            ov_layout.addWidget(val_w, r, 1, Qt.AlignmentFlag.AlignTop)
+
+        c_layout.addWidget(ov_group)
+
+        # 3. OutputIntents & ICC Profiles Group
+        oi_group = QGroupBox("Intenti di Uscita (OutputIntents & Profili ICC)")
+        oi_group.setStyleSheet(
+            f"QGroupBox {{ font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.FG};"
+            f"              border: 1px solid {t.BORDER}; border-radius: {t.RADIUS_MD}px;"
+            f"              margin-top: 10px; padding-top: 14px; background: {t.SURFACE}; }}"
+            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}"
+        )
+        oi_layout = QVBoxLayout(oi_group)
+        oi_layout.setContentsMargins(8, 8, 8, 8)
+        oi_layout.setSpacing(6)
+
+        if color_insp and color_insp.output_intents:
+            for oi in color_insp.output_intents:
+                card = QFrame()
+                card.setStyleSheet(
+                    f"background: {t.INPUT_BG}; border: 1px solid {t.BORDER_SOFT};"
+                    f"border-radius: {t.RADIUS_SM}px; padding: 6px;"
+                )
+                cd_layout = QGridLayout(card)
+                cd_layout.setContentsMargins(6, 4, 6, 4)
+                cd_layout.setSpacing(4)
+
+                header_lbl = QLabel(f"● {oi.output_condition_identifier} ({oi.subtype})")
+                header_lbl.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_XS}px; font-weight: 600;")
+                cd_layout.addWidget(header_lbl, 0, 0, 1, 2)
+
+                row_idx = 1
+                if oi.output_condition and oi.output_condition != oi.output_condition_identifier:
+                    lbl_c = QLabel("Condizione:")
+                    lbl_c.setStyleSheet(f"color: {t.FG_MUTED}; font-size: {t.TEXT_2XS}px;")
+                    val_c = QLabel(oi.output_condition)
+                    val_c.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_2XS}px;")
+                    cd_layout.addWidget(lbl_c, row_idx, 0)
+                    cd_layout.addWidget(val_c, row_idx, 1)
+                    row_idx += 1
+                if oi.info:
+                    lbl_i = QLabel("Info:")
+                    lbl_i.setStyleSheet(f"color: {t.FG_MUTED}; font-size: {t.TEXT_2XS}px;")
+                    val_i = QLabel(oi.info)
+                    val_i.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_2XS}px;")
+                    val_i.setWordWrap(True)
+                    cd_layout.addWidget(lbl_i, row_idx, 0)
+                    cd_layout.addWidget(val_i, row_idx, 1)
+                    row_idx += 1
+                if oi.registry_name:
+                    lbl_r = QLabel("Registro:")
+                    lbl_r.setStyleSheet(f"color: {t.FG_MUTED}; font-size: {t.TEXT_2XS}px;")
+                    val_r = QLabel(oi.registry_name)
+                    val_r.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_2XS}px;")
+                    cd_layout.addWidget(lbl_r, row_idx, 0)
+                    cd_layout.addWidget(val_r, row_idx, 1)
+                    row_idx += 1
+
+                if oi.profile:
+                    p = oi.profile
+                    prof_lbl = QLabel(f"Profilo ICC incorporato: {p.name} (v{p.version}, {p.color_space}, {p.rendering_intent}, {p.size_formatted})")
+                    prof_lbl.setStyleSheet(f"color: #10B981; font-size: {t.TEXT_2XS}px;")
+                    prof_lbl.setWordWrap(True)
+                    cd_layout.addWidget(prof_lbl, row_idx, 0, 1, 2)
+
+                oi_layout.addWidget(card)
+        else:
+            no_oi = QLabel("Nessun OutputIntent dichiarato nel documento.\nLa conversione colore farà riferimento al profilo standard del RIP / stampante.")
+            no_oi.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_2XS}px; font-style: italic;")
+            no_oi.setWordWrap(True)
+            oi_layout.addWidget(no_oi)
+
+        c_layout.addWidget(oi_group)
+
+        # 4. Spot Colors / Separations Group
+        spot_group = QGroupBox("Tinte Piatte e Separazioni (Spot Colors)")
+        spot_group.setStyleSheet(
+            f"QGroupBox {{ font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.FG};"
+            f"              border: 1px solid {t.BORDER}; border-radius: {t.RADIUS_MD}px;"
+            f"              margin-top: 10px; padding-top: 14px; background: {t.SURFACE}; }}"
+            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}"
+        )
+        spot_layout = QVBoxLayout(spot_group)
+        spot_layout.setContentsMargins(8, 8, 8, 8)
+        spot_layout.setSpacing(6)
+
+        if color_insp and color_insp.spot_colors:
+            spot_table = QTableWidget()
+            spot_table.setColumnCount(3)
+            spot_table.setHorizontalHeaderLabels(["Nome Tinta", "Spazio Alternativo", "Pagine"])
+            spot_table.horizontalHeader().setStretchLastSection(True)
+            spot_table.verticalHeader().setVisible(False)
+            spot_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            spot_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            spot_table.setStyleSheet(
+                f"QTableWidget {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER_SOFT};"
+                f"                gridline-color: {t.BORDER_SOFT}; font-size: {t.TEXT_XS}px; }}"
+                f"QHeaderView::section {{ background: {t.RAISED}; color: {t.FG_MUTED}; border: 1px solid {t.BORDER_SOFT}; padding: 4px; font-size: {t.TEXT_2XS}px; }}"
+            )
+            spot_table.setRowCount(len(color_insp.spot_colors))
+            for row, sp in enumerate(color_insp.spot_colors):
+                it_name = QTableWidgetItem(f"● {sp.name}")
+                it_name.setForeground(QColor(t.ACCENT))
+                it_name.setFont(QFont(t.FONT_FAMILY, 9, QFont.Weight.Bold))
+                spot_table.setItem(row, 0, it_name)
+
+                it_alt = QTableWidgetItem(sp.alternate_space)
+                it_alt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                spot_table.setItem(row, 1, it_alt)
+
+                pages_str = ", ".join(f"p.{p}" for p in sp.pages) if sp.pages else "—"
+                it_pg = QTableWidgetItem(pages_str)
+                it_pg.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                spot_table.setItem(row, 2, it_pg)
+
+            spot_table.setFixedHeight(min(140, 28 * len(color_insp.spot_colors) + 32))
+            spot_layout.addWidget(spot_table)
+        else:
+            no_spots = QLabel("Nessuna tinta piatta / separazione trovata nel documento.")
+            no_spots.setStyleSheet(f"color: {t.FG_FAINT}; font-size: {t.TEXT_2XS}px; font-style: italic;")
+            spot_layout.addWidget(no_spots)
+
+        c_layout.addWidget(spot_group)
+
+        # 5. Dynamic Page Color Group (updates per page)
+        self._page_color_group = QGroupBox("Dettaglio Colore Pagina Selezionata")
+        self._page_color_group.setStyleSheet(
+            f"QGroupBox {{ font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.FG};"
+            f"              border: 1px solid {t.BORDER}; border-radius: {t.RADIUS_MD}px;"
+            f"              margin-top: 10px; padding-top: 14px; background: {t.SURFACE}; }}"
+            f"QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}"
+        )
+        pg_layout = QGridLayout(self._page_color_group)
+        pg_layout.setContentsMargins(8, 8, 8, 8)
+        pg_layout.setSpacing(6)
+
+        self._lbl_pg_summary = QLabel("—")
+        self._lbl_pg_summary.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_XS}px; font-weight: 600;")
+        self._lbl_pg_images = QLabel("—")
+        self._lbl_pg_images.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_XS}px;")
+        self._lbl_pg_intent = QLabel("—")
+        self._lbl_pg_intent.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_XS}px;")
+        self._lbl_pg_spots = QLabel("—")
+        self._lbl_pg_spots.setStyleSheet(f"color: {t.FG}; font-size: {t.TEXT_XS}px;")
+
+        pg_fields = [
+            ("Elementi pagina:", self._lbl_pg_summary),
+            ("Immagini raster:", self._lbl_pg_images),
+            ("Intento resa:", self._lbl_pg_intent),
+            ("Tinte piatte pagina:", self._lbl_pg_spots),
+        ]
+        for r, (lbl_txt, w) in enumerate(pg_fields):
+            lbl = QLabel(lbl_txt)
+            lbl.setStyleSheet(f"color: {t.FG_MUTED}; font-size: {t.TEXT_XS}px; font-weight: 500;")
+            lbl.setFixedWidth(120)
+            pg_layout.addWidget(lbl, r, 0, Qt.AlignmentFlag.AlignTop)
+            pg_layout.addWidget(w, r, 1, Qt.AlignmentFlag.AlignTop)
+
+        c_layout.addWidget(self._page_color_group)
+        c_layout.addStretch(1)
+
+        scroll.setWidget(content)
+        return scroll
+
+    def _update_page_color_tab(self, page_color: PageColorInspection):
+        self._page_color_group.setTitle(f"Dettaglio Colore Pagina {page_color.page_number}")
+        self._lbl_pg_summary.setText(page_color.summary_str)
+        if page_color.has_rgb:
+            self._lbl_pg_summary.setStyleSheet("color: #FBBF24; font-size: 12px; font-weight: 600;")
+        else:
+            self._lbl_pg_summary.setStyleSheet(f"color: {t.FG}; font-size: 12px; font-weight: 600;")
+
+        # Images
+        if page_color.images_count > 0:
+            cs_breakdown = ", ".join(f"{count} {cs}" for cs, count in page_color.images_color_spaces.items())
+            img_txt = f"{page_color.images_count} ({cs_breakdown})"
+            if page_color.images_profiles:
+                img_txt += f" — Profili: {', '.join(page_color.images_profiles)}"
+        else:
+            img_txt = "Nessuna immagine raster"
+        self._lbl_pg_images.setText(img_txt)
+
+        # Rendering intent
+        if page_color.rendering_intents:
+            self._lbl_pg_intent.setText(", ".join(page_color.rendering_intents))
+        else:
+            self._lbl_pg_intent.setText("Standard (da OutputIntent o default)")
+
+        # Spot colors on page
+        if page_color.spot_colors:
+            self._lbl_pg_spots.setText(", ".join(page_color.spot_colors))
+            self._lbl_pg_spots.setStyleSheet(f"color: {t.ACCENT}; font-size: 12px; font-weight: 600;")
+        else:
+            self._lbl_pg_spots.setText("Nessuna")
+            self._lbl_pg_spots.setStyleSheet(f"color: {t.FG_MUTED}; font-size: 12px;")
+
     def _load_page(self, page_idx: int):
         if page_idx < 0 or page_idx >= self._inspection.page_count:
             return
@@ -709,6 +1054,10 @@ class PdfInspectorDialog(QDialog):
 
         # Update canvas
         self._canvas.set_data(self._doc, page_idx, page_info)
+
+        # Update page color details
+        if page_info.color and hasattr(self, "_update_page_color_tab"):
+            self._update_page_color_tab(page_info.color)
 
     def _on_table_selection_changed(self):
         row = self._boxes_table.currentRow()
