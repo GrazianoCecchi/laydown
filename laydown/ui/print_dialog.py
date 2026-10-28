@@ -748,7 +748,7 @@ class PrintDialog(QDialog):
 
         self._chk_center = QCheckBox("Centra sul foglio")
         self._chk_center.setChecked(self._settings.value("print/center", True, type=bool))
-        self._chk_center.toggled.connect(lambda _: (self._save_print_settings(), self._preview.updatePreview()))
+        self._chk_center.toggled.connect(lambda _: (self._save_print_settings(), self._update_overflow_warning(), self._preview.updatePreview()))
         s_layout.addWidget(self._chk_center)
 
         # Warning card for unprintable margin overflow
@@ -1102,10 +1102,32 @@ class PrintDialog(QDialog):
     # ── Overflow Warning ──────────────────────────────────────
 
     def _update_overflow_warning(self):
-        mode = self._combo_scale.currentData()
-        paper_rect_pt = self._printer.pageLayout().fullRectPoints()
-        paper_w_pt = float(paper_rect_pt.width())
-        paper_h_pt = float(paper_rect_pt.height())
+        mode = self._combo_scale.currentData() or "actual"
+        page_size = self._combo_paper.currentData()
+        orient_mode = self._combo_orient.currentData()
+
+        # Determinazione univoca dell'orientamento per la carta
+        if orient_mode == "landscape":
+            is_landscape = True
+        elif orient_mode == "portrait":
+            is_landscape = False
+        else:  # "auto"
+            is_landscape = (self._sheet_w_pt > self._sheet_h_pt)
+
+        if page_size:
+            sz_pt = page_size.sizePoints()
+            raw_w = float(sz_pt.width())
+            raw_h = float(sz_pt.height())
+            if is_landscape:
+                paper_w_pt = max(raw_w, raw_h)
+                paper_h_pt = min(raw_w, raw_h)
+            else:
+                paper_w_pt = min(raw_w, raw_h)
+                paper_h_pt = max(raw_w, raw_h)
+        else:
+            paper_rect_pt = self._printer.pageLayout().fullRectPoints()
+            paper_w_pt = float(paper_rect_pt.width())
+            paper_h_pt = float(paper_rect_pt.height())
 
         printer_name = self._combo_printers.currentData() or ""
         m_l_pt, m_t_pt, m_r_pt, m_b_pt = win_print.get_printer_hardware_margins(
@@ -1114,74 +1136,120 @@ class PrintDialog(QDialog):
         paint_w_pt = max(0.0, paper_w_pt - m_l_pt - m_r_pt)
         paint_h_pt = max(0.0, paper_h_pt - m_t_pt - m_b_pt)
 
-        overflows_paper = (self._sheet_w_pt > paper_w_pt + 1.0) or (self._sheet_h_pt > paper_h_pt + 1.0)
-        overflows_printable = (self._sheet_w_pt > paint_w_pt + 1.0) or (self._sheet_h_pt > paint_h_pt + 1.0)
+        paper_w_mm = paper_w_pt * 25.4 / 72.0
+        paper_h_mm = paper_h_pt * 25.4 / 72.0
+        paint_w_mm = paint_w_pt * 25.4 / 72.0
+        paint_h_mm = paint_h_pt * 25.4 / 72.0
+        sheet_w_mm = self._sheet_w_mm
+        sheet_h_mm = self._sheet_h_mm
 
-        paper_name = self._combo_paper.currentText()
-        paper_is_smaller = (self._sheet_w_mm > 350.0 and paper_w_pt * 25.4 / 72.0 < 350.0)
+        raw_paper_text = self._combo_paper.currentText()
+        paper_name = raw_paper_text.split("(")[0].strip() or "Carta"
+        if "A3" in raw_paper_text.upper():
+            paper_tag = "A3"
+        elif "A4" in raw_paper_text.upper():
+            paper_tag = "A4"
+        elif "SRA3" in raw_paper_text.upper():
+            paper_tag = "SRA3"
+        else:
+            paper_tag = paper_name[:12]
 
-        if paper_is_smaller:
-            if mode == "fit":
-                self._wf_title.setText("Bozza ridotta su carta A4")
-                self._wf_title.setStyleSheet(f"color: #0EA5E9; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+        exceeds_paper = (self._sheet_w_pt > paper_w_pt + 1.0) or (self._sheet_h_pt > paper_h_pt + 1.0)
+        exceeds_printable = (self._sheet_w_pt > paint_w_pt + 1.0) or (self._sheet_h_pt > paint_h_pt + 1.0)
+
+        if mode == "fit":
+            scale_factor = min(paper_w_pt / max(1.0, self._sheet_w_pt), paper_h_pt / max(1.0, self._sheet_h_pt))
+            scale_pct = scale_factor * 100.0
+            if scale_pct < 99.5:
+                self._wf_title.setText(f"Bozza proporzionale ({scale_pct:.1f}%) su {paper_tag}")
+                self._wf_title.setStyleSheet("color: #0EA5E9; font-size: 11px; font-weight: 700;")
                 self._warning_frame.setStyleSheet(
                     f"background: {t.mix('#0EA5E9', t.SURFACE, 0.15)};"
-                    f"border: 1px solid #0EA5E9; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+                    "border: 1px solid #0EA5E9; border-radius: 6px; padding: 6px 8px;"
                 )
                 self._wf_text.setText(
-                    f"Il foglio imposto A3 ({self._sheet_w_mm:.0f}×{self._sheet_h_mm:.0f} mm) viene ridotto al 70.7% "
-                    f"per entrare interamente nella carta {paper_name.split('(')[0].strip()} come bozza di verifica."
+                    f"Il lavoro ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) viene scalato al {scale_pct:.1f}% "
+                    f"per entrare interamente nella carta {paper_tag} ({paper_w_mm:.0f}×{paper_h_mm:.0f} mm). "
+                    "Modalità bozza ideale per verifiche di piega e anteprime."
+                )
+            else:
+                self._wf_title.setText(f"Adattamento proporzionale al foglio ({scale_pct:.1f}%)")
+                self._wf_title.setStyleSheet("color: #0EA5E9; font-size: 11px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix('#0EA5E9', t.SURFACE, 0.15)};"
+                    "border: 1px solid #0EA5E9; border-radius: 6px; padding: 6px 8px;"
+                )
+                self._wf_text.setText(
+                    f"Il lavoro ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) occupa interamente la carta {paper_tag} "
+                    f"({paper_w_mm:.0f}×{paper_h_mm:.0f} mm) in scala {scale_pct:.1f}%."
+                )
+            self._warning_frame.setVisible(True)
+
+        elif mode == "shrink":
+            if exceeds_paper:
+                scale_factor = min(paper_w_pt / max(1.0, self._sheet_w_pt), paper_h_pt / max(1.0, self._sheet_h_pt))
+                scale_pct = scale_factor * 100.0
+                self._wf_title.setText(f"Riduzione automatica attiva ({scale_pct:.1f}%)")
+                self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: 11px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
+                    f"border: 1px solid {t.ACCENT}; border-radius: 6px; padding: 6px 8px;"
+                )
+                self._wf_text.setText(
+                    f"Il foglio imposto ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) eccede la carta {paper_tag} "
+                    f"({paper_w_mm:.0f}×{paper_h_mm:.0f} mm) e viene ridotto automaticamente al {scale_pct:.1f}% per non essere tagliato."
+                )
+            else:
+                self._wf_title.setText(f"Grandezza naturale 100% (non ridotto su {paper_tag})")
+                self._wf_title.setStyleSheet("color: #10B981; font-size: 11px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix('#10B981', t.SURFACE, 0.15)};"
+                    "border: 1px solid #10B981; border-radius: 6px; padding: 6px 8px;"
+                )
+                self._wf_text.setText(
+                    f"Il lavoro ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) rientra nella carta {paper_tag} "
+                    f"({paper_w_mm:.0f}×{paper_h_mm:.0f} mm) e viene stampato al 100% senza riduzioni."
+                )
+            self._warning_frame.setVisible(True)
+
+        else:  # "actual" (100% 1:1)
+            if exceeds_paper:
+                self._wf_title.setText(f"Attenzione: il foglio supera la carta {paper_tag}")
+                self._wf_title.setStyleSheet("color: #EF4444; font-size: 11px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix('#EF4444', t.SURFACE, 0.2)};"
+                    "border: 1px solid #EF4444; border-radius: 6px; padding: 6px 8px;"
+                )
+                self._wf_text.setText(
+                    f"Il foglio imposto ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) è più grande della carta {paper_tag} "
+                    f"({paper_w_mm:.0f}×{paper_h_mm:.0f} mm). A grandezza reale 100% parte dell'imposizione verrà tagliata. "
+                    "Seleziona un formato carta maggiore oppure scegli 'Adatta al foglio di stampa'."
+                )
+                self._warning_frame.setVisible(True)
+            elif exceeds_printable:
+                self._wf_title.setText(f"Avviso margini fisici periferica ({paper_tag})")
+                self._wf_title.setStyleSheet("color: #F59E0B; font-size: 11px; font-weight: 700;")
+                self._warning_frame.setStyleSheet(
+                    f"background: {t.mix('#F59E0B', t.SURFACE, 0.2)};"
+                    "border: 1px solid #F59E0B; border-radius: 6px; padding: 6px 8px;"
+                )
+                self._wf_text.setText(
+                    f"Il foglio ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) rientra nella carta ma si estende nell'area non stampabile "
+                    f"dei rulli hardware ({paint_w_mm:.0f}×{paint_h_mm:.0f} mm utili). Crocini di registro o elementi al vivo potrebbero essere troncati."
                 )
                 self._warning_frame.setVisible(True)
             else:
-                self._wf_title.setText("Avviso formato carta A4")
-                self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
+                self._wf_title.setText(f"Stampa 1:1 conforme su carta {paper_tag}")
+                self._wf_title.setStyleSheet("color: #10B981; font-size: 11px; font-weight: 700;")
                 self._warning_frame.setStyleSheet(
-                    f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
-                    f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
+                    f"background: {t.mix('#10B981', t.SURFACE, 0.15)};"
+                    "border: 1px solid #10B981; border-radius: 6px; padding: 6px 8px;"
                 )
                 self._wf_text.setText(
-                    f"Attenzione: il foglio imposto ({self._sheet_w_mm:.0f}×{self._sheet_h_mm:.0f} mm) è più grande "
-                    f"della carta ({paper_name.split('(')[0].strip()}). A grandezza reale (100%) verrà stampata solo "
-                    f"l'area centrale. Seleziona 'Adatta al foglio di stampa' per vedere l'intero foglio."
+                    f"Stampa reale 1:1 a grandezza naturale (100% senza riduzioni). Il foglio ({sheet_w_mm:.0f}×{sheet_h_mm:.0f} mm) "
+                    f"rientra perfettamente nell'area utile stampabile ({paint_w_mm:.0f}×{paint_h_mm:.0f} mm)."
                 )
                 self._warning_frame.setVisible(True)
-        elif mode == "actual" and overflows_paper:
-            self._wf_title.setText("Avviso dimensioni foglio")
-            self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
-            self._warning_frame.setStyleSheet(
-                f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
-                f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
-            )
-            self._wf_text.setText(
-                f"Il foglio imposto ({self._sheet_w_mm:.0f}×{self._sheet_h_mm:.0f} mm) supera la dimensione "
-                f"della carta ({paper_w_pt*25.4/72:.0f}×{paper_h_pt*25.4/72:.0f} mm). Parte dell'imposizione verrà tagliata."
-            )
-            self._warning_frame.setVisible(True)
-        elif mode == "actual" and overflows_printable:
-            self._wf_title.setText("Avviso margini fisici stampante")
-            self._wf_title.setStyleSheet(f"color: {t.ACCENT}; font-size: {t.TEXT_2XS}px; font-weight: 700;")
-            self._warning_frame.setStyleSheet(
-                f"background: {t.mix(t.ACCENT, t.SURFACE, 0.2)};"
-                f"border: 1px solid {t.ACCENT}; border-radius: {t.RADIUS_SM}px; padding: 6px;"
-            )
-            self._wf_text.setText(
-                "Il foglio imposto si estende oltre i margini fisici stampabili della periferica. "
-                "Crocini o elementi al vivo potrebbero essere troncati."
-            )
-            self._warning_frame.setVisible(True)
-        else:
-            paper_tag = "A3" if "A3" in paper_name.upper() else ("A4" if "A4" in paper_name.upper() else paper_name.split("(")[0].strip()[:10])
-            self._wf_title.setText(f"Driver pronto: Carta {paper_tag} (1:1)")
-            self._wf_title.setStyleSheet(f"color: #10B981; font-size: {t.TEXT_2XS}px; font-weight: 700;")
-            self._warning_frame.setStyleSheet(
-                f"background: {t.mix('#10B981', t.SURFACE, 0.15)};"
-                f"border: 1px solid #10B981; border-radius: {t.RADIUS_SM}px; padding: 6px 8px;"
-            )
-            self._wf_text.setText(
-                f"Stampa reale 1:1 a grandezza naturale (100% senza riduzioni) su carta {paper_tag}."
-            )
-            self._warning_frame.setVisible(True)
 
     # ── Preview Rendering (paintRequested) ────────────────────
 

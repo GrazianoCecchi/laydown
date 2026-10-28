@@ -6,6 +6,28 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [Unreleased]
 
+- **Gestione Completa delle Preimpostazioni (Catalogo Unico JSON, ComboBox Rapida nella Toolbar e Dialog Dedicati):**
+  - **Archiviazione centralizzata in unico file JSON (`laydown/ui/presets.py`):** introdotto il nuovo `PresetManager` per la gestione di tutte le preimpostazioni in un unico file `presets.json` archiviato nella cartella dati dell'applicazione (`AppDataLocation` / `~/.laydown`), eliminando la necessità di cercare e gestire singoli file sparsi.
+  - **Template predefiniti di fabbrica (Factory Presets):** all'avvio, il sistema popola automaticamente il catalogo con i layout più utilizzati nella produzione quotidiana:
+    - `Standard (2-up su A3)`: 2 pose 1:1 affiancate su A3 orizzontale con crocini di taglio.
+    - `Biglietti da visita (10-up su A3)`: 10 pose (2×5) 1:1 con TrimBox, 2 mm di abbondanza e crocini.
+    - `Volantini A5 (4-up su A3)`: 4 pose (2×2) 1:1 con TrimBox, 2 mm di abbondanza e crocini.
+    - `Opuscolo A4 punto metallico (su A3)`: fascicolo a sella fronte/retro con linea di piega e crocini.
+    - `Locandina A3 (1-up a vivo)`: stampa singola 1-up a tutta pagina con 3 mm di abbondanza.
+  - **Selettore rapido ComboBox nella finestra principale (`laydown/ui/main_window.py`):** integrata nella barra degli strumenti principale una ComboBox che elenca tutte le preimpostazioni disponibili. La selezione di un preset applica istantaneamente tutti i parametri al `ValueStore`, sincronizza i widget delle schede e ricalcola in tempo reale l'anteprima sul canvas.
+  - **Dialoghi moderni di salvataggio e gestione (`laydown/ui/preset_dialogs.py`):**
+    - `PresetSaveDialog`: finestra modale per salvare le impostazioni correnti con nome, descrizione facoltativa e rilevamento intelligente di sovrascrittura.
+    - `PresetManagerDialog`: pannello di amministrazione completo con tabella, anteprima delle caratteristiche tecniche, pulsante *"Applica al progetto"*, *"Rinomina / Modifica"*, *"Aggiorna con impostazioni attuali"*, *"Elimina"*, *"Importa da file…"* ed *"Esporta su file…"*.
+  - **Menu File arricchito:** aggiunto il sottomenu `File → Preimpostazioni` con le azioni di salvataggio, gestione, importazione ed esportazione esterna.
+
+- **Aggiornamento dinamico e reattivo del riquadro di stato margini nel Print Dialog (`laydown/ui/print_dialog.py`):**
+  - Risolta l'anomalia per cui il riquadro informativo sui margini e sul formato carta non si aggiornava quando l'utente modificava formato carta, orientamento, modalità di scala o centratura.
+  - Ricalcolo geometrico deterministico delle dimensioni fisiche della carta e dell'area utile dei rulli hardware in base all'orientamento effettivo.
+  - Feedback visivo immediato con tre stati cromatici distinti:
+    - **Verde (1:1 Conforme):** il foglio rientra perfettamente nell'area utile stampabile della periferica al 100% a grandezza naturale.
+    - **Azzurro (Bozza Adattata):** il foglio viene scalato in proporzione calcolando la percentuale esatta di riduzione/ingrandimento per occupare la carta selezionata.
+    - **Arancione / Rosso (Avviso Margini / Taglio):** avvisa con precisione millimetrica se il foglio invade i rulli non stampabili (rischio taglio crocini) o se eccede il formato carta (troncamento dell'imposizione a 100%).
+
 - **Architettura di Stampa Professionale a doppio canale (Driver Windows GDI ad Alta Risoluzione + Invia a RIP Hot Folder):**
   - **Risoluzione definitiva del ritaglio dell'abbondanza (bleed) e del formato carta A3:**
     - Identificata e risolta la causa radice per cui nelle stampe multi-posa (es. biglietti da visita con 2 mm di abbondanza) l'immagine di sfondo debordava coprendo i biglietti adiacenti: `QSvgRenderer` di Qt6 implementa le specifiche SVG Tiny 1.2 e ignora sistematicamente i tag `<clipPath>` contenenti matrici di trasformazione, dipingendo l'intero sfondo della pagina sorgente senza ritagliarlo al box di rifilo + abbondanza.

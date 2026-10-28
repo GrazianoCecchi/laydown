@@ -264,6 +264,41 @@ class TestPrintDialogUI:
             dlg.close_document()
             dlg.close()
 
+    def test_overflow_warning_updates_dynamically_on_user_changes(self, app, sample_project, sample_pdf):
+        dlg = PrintDialog(project=sample_project, pdf_path=sample_pdf)
+        dlg.show()
+        try:
+            # 1. Mode actual
+            dlg._combo_scale.setCurrentIndex(dlg._combo_scale.findData("actual"))
+            dlg._on_scale_mode_changed()
+            title_actual = dlg._wf_title.text()
+            assert "1:1" in title_actual or "Attenzione" in title_actual or "Avviso" in title_actual
+
+            # 2. Change to 'fit' (Adatta)
+            dlg._combo_scale.setCurrentIndex(dlg._combo_scale.findData("fit"))
+            dlg._on_scale_mode_changed()
+            title_fit = dlg._wf_title.text()
+            assert "Bozza" in title_fit or "Adattamento" in title_fit or "proporzionale" in title_fit
+            assert title_fit != title_actual
+
+            # 3. Change to 'shrink' (Riduci)
+            dlg._combo_scale.setCurrentIndex(dlg._combo_scale.findData("shrink"))
+            dlg._on_scale_mode_changed()
+            title_shrink = dlg._wf_title.text()
+            assert "Riduzione" in title_shrink or "100%" in title_shrink
+
+            # 4. Change orientation
+            dlg._combo_orient.setCurrentIndex(1)  # Landscape
+            dlg._on_orientation_changed()
+            assert not dlg._warning_frame.isHidden()
+
+            # 5. Toggle center
+            dlg._chk_center.setChecked(not dlg._chk_center.isChecked())
+            assert not dlg._warning_frame.isHidden()
+        finally:
+            dlg.close_document()
+            dlg.close()
+
     def test_draft_and_production_buttons_and_dialog_stays_open(self, app, sample_project, sample_pdf):
         dlg = PrintDialog(project=sample_project, pdf_path=sample_pdf)
         try:

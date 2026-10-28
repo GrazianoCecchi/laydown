@@ -20,7 +20,7 @@ from PyQt6.QtGui import (
     QAction, QActionGroup, QDragEnterEvent, QDropEvent, QIcon, QKeySequence,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QButtonGroup, QDialog, QDialogButtonBox, QFileDialog, QFrame,
+    QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
     QHBoxLayout, QLabel, QMainWindow, QMessageBox, QProgressDialog, QPushButton,
     QScrollArea, QSizePolicy, QStackedWidget, QStatusBar, QTextBrowser, QToolButton,
     QVBoxLayout, QWidget,
@@ -265,6 +265,7 @@ class MainWindow(QMainWindow):
         self._load_recent()
         self._build_menubar()
         self._build_main_area()
+        self._populate_preset_combo()
         self._restore_view_settings()
         self._on_values_changed()
 
@@ -315,10 +316,18 @@ class MainWindow(QMainWindow):
                                      enabled=False, triggered=self._on_send_to_rip)
         file_menu.addAction(self._act_send_rip)
         file_menu.addSeparator()
-        file_menu.addAction(QAction(mi("save_preset"), "Salva &predefinito…", self,
-                                    triggered=self._on_save_preset))
-        file_menu.addAction(QAction(mi("load_preset"), "&Carica predefinito…", self,
-                                    triggered=self._on_load_preset))
+
+        preset_menu = file_menu.addMenu("Preim&postazioni")
+        preset_menu.setIcon(mi("save_preset"))
+        preset_menu.addAction(QAction(mi("save_preset"), "&Salva impostazioni correnti…", self,
+                                      triggered=self._on_save_preset))
+        preset_menu.addAction(QAction(mi("load_preset"), "&Gestione preimpostazioni…", self,
+                                      triggered=self._on_manage_presets))
+        preset_menu.addSeparator()
+        preset_menu.addAction(QAction(mi("load_preset"), "&Importa da file esterno…", self,
+                                      triggered=self._on_import_preset_file))
+        preset_menu.addAction(QAction(mi("save_preset"), "&Esporta su file esterno…", self,
+                                      triggered=self._on_export_preset_file))
         file_menu.addSeparator()
         file_menu.addAction(QAction(mi("quit"), "&Esci", self,
                                     shortcut=QKeySequence("Alt+F4"), triggered=self.close))
@@ -442,6 +451,33 @@ class MainWindow(QMainWindow):
         )
         self._btn_margins.toggled.connect(self._on_margins_toggle)
         row.addWidget(self._btn_margins)
+
+        row.addWidget(_vsep())
+
+        # ── Preset selector & actions ──
+        preset_lbl = QLabel("Predefinito:")
+        preset_lbl.setStyleSheet(f"color: {t.FG_MUTED}; font-size: {t.TEXT_2XS}px; font-weight: 600; margin-left: 4px; margin-right: 2px;")
+        row.addWidget(preset_lbl)
+
+        self._combo_preset = QComboBox()
+        self._combo_preset.setFixedWidth(210)
+        self._combo_preset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._combo_preset.setStyleSheet(
+            f"QComboBox {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER};"
+            f"             border-radius: {t.RADIUS_SM}px; padding: 2px 6px;"
+            f"             color: {t.FG}; font-size: {t.TEXT_2XS}px; }}"
+            f"QComboBox::drop-down {{ border: none; width: 16px; }}"
+        )
+        self._combo_preset.activated.connect(self._on_preset_combo_activated)
+        row.addWidget(self._combo_preset)
+
+        btn_save_p = _tool_btn(lucide("save_preset", 15), "Salva impostazioni correnti come preimpostazione…")
+        btn_save_p.clicked.connect(self._on_save_preset)
+        row.addWidget(btn_save_p)
+
+        btn_manage_p = _tool_btn(lucide("load_preset", 15), "Gestione preimpostazioni (elenco, modifica, elimina, esporta)…")
+        btn_manage_p.clicked.connect(self._on_manage_presets)
+        row.addWidget(btn_manage_p)
 
         row.addStretch(1)
         for glyph, tip, slot in (
@@ -889,17 +925,90 @@ class MainWindow(QMainWindow):
 
     # ── presets ──────────────────────────────────
 
+    def _populate_preset_combo(self, selected_name: str = ""):
+        from laydown.ui.presets import PresetManager
+        self._combo_preset.blockSignals(True)
+        self._combo_preset.clear()
+        self._combo_preset.addItem("— Seleziona preimpostazione —", "")
+        names = PresetManager.list_names()
+        target_idx = 0
+        for idx, name in enumerate(names, start=1):
+            self._combo_preset.addItem(name, name)
+            if name == selected_name:
+                target_idx = idx
+        self._combo_preset.setCurrentIndex(target_idx)
+        self._combo_preset.blockSignals(False)
+
+    def _on_preset_combo_activated(self, index: int):
+        name = self._combo_preset.itemData(index)
+        if not name:
+            return
+        from laydown.ui.presets import PresetManager
+        vals = PresetManager.get_preset(name)
+        if vals:
+            self._apply_preset(name, vals)
+
+    def _apply_preset(self, name: str, vals: dict):
+        self._store.load(vals)
+        self._rebuild_collection_editors()
+        self._resync_widgets()
+        self._populate_preset_combo(selected_name=name)
+        self._status.showMessage(f"Preimpostazione applicata: {name}")
+
     def _on_save_preset(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Salva predefinito", "preset.laydown.json", "Predefinito Laydown (*.json)")
+        from laydown.ui.preset_dialogs import PresetSaveDialog
+        cur_name = self._combo_preset.currentData() or ""
+        dlg = PresetSaveDialog(current_values=self._store.values(), default_name=cur_name, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            saved_name = dlg.saved_name
+            self._populate_preset_combo(selected_name=saved_name)
+            self._status.showMessage(f"Preimpostazione salvata: {saved_name}")
+
+    def _on_manage_presets(self):
+        from laydown.ui.preset_dialogs import PresetManagerDialog
+        dlg = PresetManagerDialog(current_values=self._store.values(), parent=self)
+        dlg.preset_applied.connect(self._apply_preset)
+        dlg.exec()
+        cur_name = self._combo_preset.currentData() or ""
+        self._populate_preset_combo(selected_name=cur_name)
+
+    def _on_import_preset_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Importa preimpostazione da file", "", "Predefiniti Laydown (*.json *.laydown.json);;Tutti i file (*)"
+        )
         if not path:
             return
-        from laydown.ui.presets import save_preset
+        from laydown.ui.presets import PresetManager
         try:
-            save_preset(path, self._store.values())
-            self._status.showMessage(f"Predefinito salvato → {os.path.basename(path)}")
+            name = PresetManager.import_from_file(path)
+            vals = PresetManager.get_preset(name)
+            if vals:
+                self._apply_preset(name, vals)
+            else:
+                self._populate_preset_combo(selected_name=name)
+            self._status.showMessage(f"Preimpostazione importata nel catalogo: {name}")
         except Exception as exc:
-            QMessageBox.critical(self, "Impossibile salvare il predefinito", str(exc))
+            QMessageBox.critical(self, "Impossibile importare la preimpostazione", str(exc))
+
+    def _on_export_preset_file(self):
+        cur_name = self._combo_preset.currentData()
+        from laydown.ui.presets import PresetManager
+        names = PresetManager.list_names()
+        target_name = cur_name if cur_name in names else (names[0] if names else "")
+        if not target_name:
+            QMessageBox.warning(self, "Attenzione", "Nessuna preimpostazione disponibile da esportare.")
+            return
+        safe_name = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in target_name)
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Esporta preimpostazione", f"{safe_name}.laydown.json", "Predefiniti Laydown (*.laydown.json *.json)"
+        )
+        if not path:
+            return
+        try:
+            PresetManager.export_to_file(target_name, path)
+            self._status.showMessage(f"Preimpostazione '{target_name}' esportata in: {os.path.basename(path)}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Impossibile esportare la preimpostazione", str(exc))
 
     def _on_load_preset(self):
         path, _ = QFileDialog.getOpenFileName(
