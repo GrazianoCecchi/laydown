@@ -138,3 +138,28 @@ class TestCustomSheetImposition:
 
         assert abs(rect.width - mm_to_pt(650.0)) < 0.1
         assert abs(rect.height - mm_to_pt(320.0)) < 0.1
+
+
+class TestFormatDialogs:
+    def test_dialogs_instantiate_and_populate(self):
+        from PyQt6.QtWidgets import QApplication
+        from laydown.ui.format_dialogs import FormatManagerDialog, FormatSaveDialog
+
+        app = QApplication.instance() or QApplication([])
+
+        # Add a custom format to test table population
+        SheetFormatManager.save_custom_format("Formato Dialog Test", 310.0, 440.0)
+
+        # Test manager dialog
+        manager = FormatManagerDialog()
+        assert manager._table.rowCount() > len(SHEET_PRESETS_MM)
+        # Select first row
+        manager._table.selectRow(0)
+        assert manager._btn_delete.isEnabled() is True
+
+        # Test save dialog
+        saver = FormatSaveDialog(default_width_mm=320.0, default_height_mm=450.0, default_name="Nuovo Formato")
+        assert saver._name_edit.text() == "Nuovo Formato"
+        assert saver._w_spin.value() == 320.0
+        assert saver._h_spin.value() == 450.0
+        assert saver._btn_save.isEnabled() is True

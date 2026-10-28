@@ -49,6 +49,8 @@ _GEOMETRY = {
     'print': '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /> <path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" /> <rect x="6" y="14" width="12" height="8" rx="1" />',
     'send': '<path d="m22 2-7 20-4-9-9-4Z" /> <path d="M22 2 11 13" />',
     'printable_area': '<rect width="18" height="18" x="3" y="3" rx="2" /> <rect width="10" height="10" x="7" y="7" rx="1" stroke-dasharray="2 1.5" />',
+    'plus': '<path d="M5 12h14" /> <path d="M12 5v14" />',
+    'trash': '<path d="M3 6h18" /> <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /> <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />',
 }
 
 # Lucide's canvas and stroke conventions — do not change per-icon, that's the point.
