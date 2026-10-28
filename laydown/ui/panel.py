@@ -16,13 +16,14 @@ from typing import Any, Dict, List, Optional
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
-    QSpinBox, QVBoxLayout, QWidget,
+    QPushButton, QSpinBox, QToolButton, QVBoxLayout, QWidget,
 )
 
 from laydown.engine.capabilities import assign
 from laydown.engine.data_model import Project
 from laydown.engine.utils import Unit
 from laydown.ui import theme as t
+from laydown.ui.icons import lucide
 from laydown.ui.components import (
     FieldRow, SectionHeader, Segmented, Switch, divider,
 )
@@ -197,6 +198,19 @@ class ValueStore(QObject):
         self.changed.emit()
 
 
+def _reload_preset_options(combo: QComboBox, store: ValueStore):
+    from laydown.ui.sheet_formats import SheetFormatManager
+    current_val = store.get("sheet.preset")
+    combo.blockSignals(True)
+    combo.clear()
+    for option_value, text in SheetFormatManager.get_preset_options():
+        combo.addItem(text, option_value)
+    idx = combo.findData(current_val)
+    if idx >= 0:
+        combo.setCurrentIndex(idx)
+    combo.blockSignals(False)
+
+
 def _build_control(control: Control, store: ValueStore):
     """
     One schema entry → (row to show, the bound widget).
@@ -234,13 +248,49 @@ def _build_control(control: Control, store: ValueStore):
 
     if control.type is ControlType.SELECT:
         widget = QComboBox()
-        for option_value, text in control.options:
+        options = control.options
+        if control.target == "sheet.preset":
+            try:
+                from laydown.ui.sheet_formats import SheetFormatManager
+                options = SheetFormatManager.get_preset_options()
+            except Exception:
+                options = control.options
+        for option_value, text in options:
             widget.addItem(text, option_value)
         index = widget.findData(value)
         if index >= 0:
             widget.setCurrentIndex(index)
         widget.currentIndexChanged.connect(
             lambda _, c=control, w=widget: store.set(c.target, w.currentData()))
+
+        if control.target == "sheet.preset":
+            container = QWidget()
+            row_layout = QHBoxLayout(container)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+            row_layout.addWidget(widget, 1)
+
+            btn_fmt = QToolButton()
+            btn_fmt.setIcon(lucide("tab_sheet", 15))
+            btn_fmt.setToolTip("Gestione formati carta (crea, modifica, esporta/importa JSON)…")
+            btn_fmt.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_fmt.setStyleSheet(
+                f"QToolButton {{ padding: 3px 5px; border-radius: {t.RADIUS_SM}px; border: 1px solid {t.BORDER};"
+                f"               background: {t.INPUT_BG}; }}"
+                f"QToolButton:hover {{ background: {t.HOVER_WASH}; }}"
+            )
+
+            def _open_format_manager():
+                from laydown.ui.format_dialogs import FormatManagerDialog
+                dlg = FormatManagerDialog(parent=widget.window())
+                dlg.formats_changed.connect(lambda: _reload_preset_options(widget, store))
+                dlg.exec()
+                _reload_preset_options(widget, store)
+
+            btn_fmt.clicked.connect(_open_format_manager)
+            row_layout.addWidget(btn_fmt)
+            return FieldRow(control.label, container, control.description), widget
+
         return FieldRow(control.label, widget, control.description), widget
 
     if control.type is ControlType.NUMBER:
@@ -316,6 +366,32 @@ class SectionWidget(QWidget):
             if bound is not None:
                 self._bound[control.target] = bound
 
+            if control.target == "sheet.custom_height_mm":
+                btn_save_fmt = QPushButton("  Salva formato personalizzato…")
+                btn_save_fmt.setIcon(lucide("save_preset", 14))
+                btn_save_fmt.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_save_fmt.setStyleSheet(
+                    f"QPushButton {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER};"
+                    f"              border-radius: {t.RADIUS_SM}px; padding: 4px 8px;"
+                    f"              color: {t.FG}; font-size: {t.TEXT_XS}px; }}"
+                    f"QPushButton:hover {{ background: {t.HOVER_WASH}; }}"
+                )
+
+                def _save_current_custom():
+                    from laydown.ui.format_dialogs import FormatSaveDialog
+                    w_mm = float(store.get("sheet.custom_width_mm") or 297.0)
+                    h_mm = float(store.get("sheet.custom_height_mm") or 420.0)
+                    dlg = FormatSaveDialog(default_width_mm=w_mm, default_height_mm=h_mm, parent=self.window())
+                    if dlg.exec():
+                        preset_combo = self._bound.get("sheet.preset")
+                        if isinstance(preset_combo, QComboBox):
+                            _reload_preset_options(preset_combo, store)
+                        store.set("sheet.preset", dlg.saved_name)
+
+                btn_save_fmt.clicked.connect(_save_current_custom)
+                body.addWidget(btn_save_fmt)
+                self._rows.append((control, btn_save_fmt))
+
         column.addWidget(self._body)
         column.addWidget(divider())
         store.unit_changed.connect(self.apply_unit)
@@ -348,6 +424,9 @@ class SectionWidget(QWidget):
                     widget.setChecked(bool(value))
                 elif isinstance(widget, QComboBox):
                     index = widget.findData(value)
+                    if index < 0 and target == "sheet.preset":
+                        _reload_preset_options(widget, self._store)
+                        index = widget.findData(value)
                     if index >= 0:
                         widget.setCurrentIndex(index)
                 elif isinstance(widget, QSpinBox):

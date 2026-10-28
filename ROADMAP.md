@@ -201,6 +201,10 @@ Each item lands with a bench test, and only then does its schema control come ba
 ---
 
 ## Backlog
+- **Multi-Sheet & Multi-Asset Project (Montaggio Avanzato / Gang-Run)** — evoluzione a progetto
+  completo: pool di file PDF, fogli macchina indipendenti con formati carta eterogenei, posizionamento
+  libero/a griglia e canvas interattivo. Documento di architettura e piano in 5 fasi:
+  `docs/ai/ROADMAP_MULTI_SHEET_PROJECT.md`.
 - **Step & Repeat** and **Cut Stack** — of IW's six layout modes these two carry real label/card
   work; Dutch Cut is niche and Shuffle is deprecated even in IW.
 - **CLI / batch / hot folders** — the headless CLI landed 2026-10-12 (`laydown impose` and

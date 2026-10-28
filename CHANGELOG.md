@@ -6,6 +6,23 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ## [0.4.9] - 2026-10-28
 
+- **Formati Carta Tipografici e Digitali Professionali & Gestione Formati Personalizzati in JSON:**
+  - **Ampliamento formati standard europei e da tipografia (`laydown/engine/data_model.py` & `laydown/ui/schema.py`):**
+    - Integrati nativamente nel motore i formati professionali di prestampa: `A3+ / Super A3 (13×19")` (329 × 483 mm), `12×18"` (304.8 × 457.2 mm), `SRA1` (640 × 900 mm), `70×100 Tipografico` (700 × 1000 mm), `64×88` (640 × 880 mm), `B4` (250 × 353 mm), `B3` (353 × 500 mm), `B2` (500 × 707 mm), a fianco dei classici `A5, A4, SRA4, A3, SRA3, A2, SRA2, Letter, Legal, Tabloid`.
+    - Menu a tendina parlante con dimensioni espresse in millimetri visibili a colpo d'occhio (es. `SRA3 (320 × 450 mm)`, `A3+ / Super A3 (329 × 483 mm)`).
+  - **Gestore Formati Personalizzati Utente (`laydown/ui/sheet_formats.py`):**
+    - Nuovo `SheetFormatManager` con persistenza centralizzata in file JSON `sheet_formats.json` nella cartella AppData dell'utente.
+    - Sincronizzazione dinamica con l'engine tramite il registro `USER_SHEET_PRESETS_MM` e `register_user_sheet_preset()`, mantenendo il motore `engine/` rigorosamente Qt-free.
+    - Supporto per esportazione e importazione di formati carta su file JSON esterni per scambio tra postazioni di lavoro.
+  - **Dialoghi moderni di gestione e salvataggio rapido (`laydown/ui/format_dialogs.py` & `laydown/ui/panel.py`):**
+    - `FormatManagerDialog`: interfaccia completa con tabella di tutti i formati disponibili, distinzione visiva tra formati di sistema e formati utente, pulsanti per nuovo formato, eliminazione, import ed export JSON.
+    - `FormatSaveDialog`: finestra rapida per memorizzare le dimensioni correnti con nome e descrizione.
+    - Pulsante dedicato alla gestione formati accanto alla combobox "Formato" e pulsante *"Salva formato personalizzato…"* visibile immediatamente quando si seleziona la modalità "Personalizzato".
+    - Aggiunto sottomenu dedicato `File → Formati carta` in `main_window.py`.
+  - **Suite di Test (`tests/test_sheet_formats.py` & `tests/test_sheet_presets.py`):**
+    - Test di isolamento con fixture temporanea per salvare, caricare, eliminare ed esportare formati JSON.
+    - Verifica di corretta imposizione end-to-end con formato personalizzato generato a misura esatta.
+
 - **Gestione Completa delle Preimpostazioni (Catalogo Unico JSON, ComboBox Rapida nella Toolbar e Dialog Dedicati):**
   - **Archiviazione centralizzata in unico file JSON (`laydown/ui/presets.py`):** introdotto il nuovo `PresetManager` per la gestione di tutte le preimpostazioni in un unico file `presets.json` archiviato nella cartella dati dell'applicazione (`AppDataLocation` / `~/.laydown`), eliminando la necessità di cercare e gestire singoli file sparsi.
   - **Template predefiniti di fabbrica (Factory Presets):** all'avvio, il sistema popola automaticamente il catalogo con i layout più utilizzati nella produzione quotidiana:

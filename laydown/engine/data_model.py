@@ -6,7 +6,7 @@ Used as the shared contract between engine and UI.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from enum import Enum
 
 
@@ -15,17 +15,57 @@ from enum import Enum
 # ──────────────────────────────────────────────
 
 SHEET_PRESETS_MM = {
+    # Serie ISO A
     "A5": (148.0, 210.0),
     "A4": (210.0, 297.0),
     "SRA4": (225.0, 320.0),
     "A3": (297.0, 420.0),
     "SRA3": (320.0, 450.0),
+    # Digital press & SRA
+    "A3+": (329.0, 483.0),
+    "12x18": (304.8, 457.2),
     "A2": (420.0, 594.0),
     "SRA2": (450.0, 640.0),
+    # Serie ISO B
+    "B4": (250.0, 353.0),
+    "B3": (353.0, 500.0),
+    "B2": (500.0, 707.0),
+    # Grandi formati tipografici offset
+    "SRA1": (640.0, 900.0),
+    "64x88": (640.0, 880.0),
+    "70x100": (700.0, 1000.0),
+    # Standard US
     "Letter": (215.9, 279.4),
     "Legal": (215.9, 355.6),
     "Tabloid": (279.4, 431.8),
 }
+
+# User-registered custom sheet formats (populated dynamically at runtime)
+USER_SHEET_PRESETS_MM: Dict[str, Tuple[float, float]] = {}
+
+
+def register_user_sheet_preset(name: str, width_mm: float, height_mm: float) -> None:
+    """Register or update a user-defined custom sheet preset in mm (stored portrait: w < h)."""
+    w = float(width_mm)
+    h = float(height_mm)
+    USER_SHEET_PRESETS_MM[name] = (min(w, h), max(w, h))
+
+
+def unregister_user_sheet_preset(name: str) -> None:
+    """Remove a user-defined sheet preset."""
+    USER_SHEET_PRESETS_MM.pop(name, None)
+
+
+def clear_user_sheet_presets() -> None:
+    """Clear all registered user sheet presets."""
+    USER_SHEET_PRESETS_MM.clear()
+
+
+def get_sheet_preset_size_mm(preset_name: str) -> Optional[Tuple[float, float]]:
+    """Return (w, h) in mm (portrait) if found in user or built-in presets, else None."""
+    if preset_name in USER_SHEET_PRESETS_MM:
+        return USER_SHEET_PRESETS_MM[preset_name]
+    return SHEET_PRESETS_MM.get(preset_name)
 
 
 # ──────────────────────────────────────────────
@@ -210,6 +250,8 @@ class SheetSettings:
         """Return (w, h) in mm after applying orientation."""
         if self.preset == "Custom":
             w, h = self.custom_width_mm, self.custom_height_mm
+        elif self.preset in USER_SHEET_PRESETS_MM:
+            w, h = USER_SHEET_PRESETS_MM[self.preset]
         else:
             w, h = SHEET_PRESETS_MM.get(self.preset, (297.0, 420.0))
         if self.orientation == Orientation.LANDSCAPE:

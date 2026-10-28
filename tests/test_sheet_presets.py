@@ -25,11 +25,15 @@ class TestPresetTable:
         assert SHEET_PRESETS_MM["SRA4"] == (225.0, 320.0)
         assert SHEET_PRESETS_MM["SRA3"] == (320.0, 450.0)
         assert SHEET_PRESETS_MM["SRA2"] == (450.0, 640.0)
+        assert SHEET_PRESETS_MM["SRA1"] == (640.0, 900.0)
+        assert SHEET_PRESETS_MM["A3+"] == (329.0, 483.0)
+        assert SHEET_PRESETS_MM["70x100"] == (700.0, 1000.0)
 
     def test_dropdown_reads_naturally(self):
         control = next(c for c in all_controls() if c.target == "sheet.preset")
         assert [key for key, _ in control.options] == [
-            "A5", "A4", "SRA4", "A3", "SRA3", "A2", "SRA2",
+            "A5", "A4", "SRA4", "A3", "SRA3", "A3+", "12x18", "A2", "SRA2",
+            "B4", "B3", "B2", "SRA1", "64x88", "70x100",
             "Letter", "Legal", "Tabloid", "Custom",
         ]
 

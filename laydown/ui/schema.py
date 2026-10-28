@@ -118,7 +118,28 @@ _REPEAT_OPTIONS = (
     (RepeatMode.COPIES, "Numero copie"),
 )
 
-_PRESET_OPTIONS = tuple((k, k) for k in SHEET_PRESETS_MM) + (("Custom", "Personalizzato"),)
+_BUILTIN_LABELS = {
+    "A5": "A5 (148 × 210 mm)",
+    "A4": "A4 (210 × 297 mm)",
+    "SRA4": "SRA4 (225 × 320 mm)",
+    "A3": "A3 (297 × 420 mm)",
+    "SRA3": "SRA3 (320 × 450 mm)",
+    "A3+": "A3+ / Super A3 (329 × 483 mm)",
+    "12x18": "12×18\" (304.8 × 457.2 mm)",
+    "A2": "A2 (420 × 594 mm)",
+    "SRA2": "SRA2 (450 × 640 mm)",
+    "B4": "B4 (250 × 353 mm)",
+    "B3": "B3 (353 × 500 mm)",
+    "B2": "B2 (500 × 707 mm)",
+    "SRA1": "SRA1 (640 × 900 mm)",
+    "64x88": "64×88 (640 × 880 mm)",
+    "70x100": "70×100 (700 × 1000 mm)",
+    "Letter": "Letter (215.9 × 279.4 mm)",
+    "Legal": "Legal (215.9 × 355.6 mm)",
+    "Tabloid": "Tabloid (279.4 × 431.8 mm)",
+}
+
+_PRESET_OPTIONS = tuple((k, _BUILTIN_LABELS.get(k, k)) for k in SHEET_PRESETS_MM) + (("Custom", "Personalizzato"),)
 
 _IS_BOOKLET = When(target="layout.layout_type", equals=LayoutType.BOOKLET)
 _IS_NUP = When(target="layout.layout_type", equals=LayoutType.NUP)

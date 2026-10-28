@@ -261,6 +261,9 @@ class MainWindow(QMainWindow):
         self._export.done.connect(self._on_export_done)
         self._export.failed.connect(self._on_export_failed)
 
+        from laydown.ui.sheet_formats import SheetFormatManager
+        SheetFormatManager.load_custom_formats()
+
         self._update_title()
         self._load_recent()
         self._build_menubar()
@@ -328,6 +331,18 @@ class MainWindow(QMainWindow):
                                       triggered=self._on_import_preset_file))
         preset_menu.addAction(QAction(mi("save_preset"), "&Esporta su file esterno…", self,
                                       triggered=self._on_export_preset_file))
+
+        format_menu = file_menu.addMenu("&Formati carta")
+        format_menu.setIcon(mi("tab_sheet"))
+        format_menu.addAction(QAction(mi("save_preset"), "&Salva formato corrente come personalizzato…", self,
+                                      triggered=self._on_save_custom_sheet_format))
+        format_menu.addAction(QAction(mi("load_preset"), "&Gestione formati carta…", self,
+                                      triggered=self._on_manage_sheet_formats))
+        format_menu.addSeparator()
+        format_menu.addAction(QAction(mi("load_preset"), "&Importa formati da JSON…", self,
+                                      triggered=self._on_import_sheet_formats))
+        format_menu.addAction(QAction(mi("save_preset"), "&Esporta formati su JSON…", self,
+                                      triggered=self._on_export_sheet_formats))
         file_menu.addSeparator()
         file_menu.addAction(QAction(mi("quit"), "&Esci", self,
                                     shortcut=QKeySequence("Alt+F4"), triggered=self.close))
@@ -1009,6 +1024,63 @@ class MainWindow(QMainWindow):
             self._status.showMessage(f"Preimpostazione '{target_name}' esportata in: {os.path.basename(path)}")
         except Exception as exc:
             QMessageBox.critical(self, "Impossibile esportare la preimpostazione", str(exc))
+
+    def _on_save_custom_sheet_format(self):
+        from laydown.ui.format_dialogs import FormatSaveDialog
+        cur_preset = self._store.get("sheet.preset")
+        if cur_preset == "Custom":
+            w = float(self._store.get("sheet.custom_width_mm") or 297.0)
+            h = float(self._store.get("sheet.custom_height_mm") or 420.0)
+        else:
+            project = self.build_project()
+            w, h = project.sheet.sheet_size_mm()
+        dlg = FormatSaveDialog(default_width_mm=w, default_height_mm=h, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            saved_name = dlg.saved_name
+            self._store.set("sheet.preset", saved_name)
+            self._status.showMessage(f"Formato carta personalizzato salvato: {saved_name}")
+
+    def _on_manage_sheet_formats(self):
+        from laydown.ui.format_dialogs import FormatManagerDialog
+        dlg = FormatManagerDialog(parent=self)
+        dlg.exec()
+        self._resync_widgets()
+
+    def _on_import_sheet_formats(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Importa formati carta da file JSON", "", "File JSON (*.json);;Tutti i file (*)"
+        )
+        if not path:
+            return
+        from laydown.ui.sheet_formats import SheetFormatManager
+        try:
+            count = SheetFormatManager.import_formats(path)
+            self._resync_widgets()
+            self._status.showMessage(f"Importati o aggiornati {count} formati carta.")
+            QMessageBox.information(self, "Importazione completata", f"Importati con successo {count} formati carta.")
+        except Exception as exc:
+            QMessageBox.critical(self, "Impossibile importare i formati carta", str(exc))
+
+    def _on_export_sheet_formats(self):
+        from laydown.ui.sheet_formats import SheetFormatManager
+        custom = SheetFormatManager.load_custom_formats()
+        if not custom:
+            QMessageBox.information(
+                self,
+                "Nessun formato personalizzato",
+                "Non ci sono formati personalizzati da esportare. I formati standard sono già integrati nell'app.",
+            )
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Esporta formati carta su JSON", "formati_carta.json", "File JSON (*.json)"
+        )
+        if not path:
+            return
+        try:
+            SheetFormatManager.export_formats(path)
+            self._status.showMessage(f"Formati carta esportati in: {os.path.basename(path)}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Impossibile esportare i formati carta", str(exc))
 
     def _on_load_preset(self):
         path, _ = QFileDialog.getOpenFileName(
