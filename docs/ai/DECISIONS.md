@@ -62,3 +62,12 @@
   - **Production RIP Channel (Roland VersaWorks, EFI Fiery, PRISMAsync, Caldera):** Direct
     vector PDF dispatch to monitored Hot Folders via `HotFolderManager` and `SendToRipDialog`.
     Industrial RIPs require pure ISO 32000 vector PDFs rather than Windows print spooler queues.
+
+## 2026-10-30 — Direct Network Printing (RAW 9100 + PJL & LPR 515) for Production Presses
+
+- **Direct Vector TCP Stream Dispatch:** For production presses with native embedded Adobe PDF /
+  PostScript 3 interpreters (e.g. Ricoh Pro C5300SL GWNX controller), Laydown bypasses both Windows
+  print drivers and external hot-folder software by streaming pure vector PDFs directly over TCP/IP
+  (RAW Port 9100 with PJL job parameters or LPR Port 515 to Ricoh Virtual Printers).
+- **Engine/UI Separation:** `laydown/engine/net_print.py` owns PJL construction, socket probing, and
+  RFC 1179 LPR streams without any Qt imports, allowing full headless testing.

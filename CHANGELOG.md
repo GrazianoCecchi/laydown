@@ -4,6 +4,30 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
+## [0.4.9] - 2026-10-30
+
+- **Invio Diretto a Stampante di Rete (Ricoh Direct Print / RAW Socket 9100 / LPR) e RIP Dispatch:**
+  - **Motore di Trasmissione di Rete Headless (`laydown/engine/net_print.py`):**
+    - Nuovo modulo 100% Qt-free per il dialogo diretto con stampanti digitali da produzione (come Ricoh Pro C5300SL) dotate di interprete nativo Adobe PDF / PostScript 3:
+      - `query_pjl_printer_info`: sonda di rete tramite comandi PJL standard (`@PJL INFO ID`, `@PJL INFO STATUS`) per rilevare stato online, modello esatto (es. `"RICOH Pro C5300SL"`) e stato corrente della macchina.
+      - `build_pjl_header` & `build_pjl_trailer`: generazione di wrapper PJL per specificare nome del lavoro, numero di copie (`@PJL SET QTY`), fronte/retro (`@PJL SET DUPLEX = ON/OFF`), orientamento di rilegatura (`@PJL SET BINDING = LONGEDGE/SHORTEDGE` per booklet) e passaggio trasparente a `@PJL ENTER LANGUAGE = PDF`.
+      - `send_pdf_raw_socket`: trasmissione del flusso PDF vettoriale puro di produzione direttamente su porta TCP 9100 ad alta velocità con streaming a blocchi, monitoraggio percentuale di avanzamento e supporto per annullamento.
+      - `send_pdf_lpr`: implementazione conforme allo standard RFC 1179 (porta 515) per l'invio a code specifiche o a *Stampanti Virtuali* create su Ricoh Web Image Monitor (con cassetto e parametri finitura pre-assegnati).
+  - **Interfaccia Utente Unificata nel Dialogo di Invio (`laydown/ui/hot_folder.py`):**
+    - Riorganizzazione del dialogo con `QTabWidget` a due schede operative in tema scuro:
+      - **Scheda 1 — Stampante di Rete (Ricoh / Direct PDF):**
+        - Campo IP (pre-popolato con `192.168.1.155` e persistente in `QSettings`), porta configurabile (9100 / 515).
+        - Pulsante *"Verifica connessione"* non bloccante in background con badge dinamico di stato (`🟢 Connesso: RICOH Pro C5300SL`).
+        - Selezione rapida protocollo: *RAW Socket (Porta 9100)* vs *LPR / Coda Virtuale (Porta 515)* con campo dedicato per il nome della coda.
+        - Opzioni rapide del lavoro: selezione copie e selettore Fronte/Retro (*Solo Fronte*, *Fronte/Retro Lato Lungo*, *Fronte/Retro Lato Corto per Booklet*).
+        - Barra di avanzamento dell'invio in tempo reale e gestione thread asincrono `NetworkPrintWorker` per garantire la massima reattività dell'interfaccia.
+      - **Scheda 2 — Cartella Hot Folder (Fiery, VersaWorks, Caldera):**
+        - Preservata integralmente la funzionalità di esportazione vettoriale con denominazione standardizzata verso cartelle monitorate su disco o percorsi di rete SMB.
+    - Memorizzazione automatica dell'ultima scheda utilizzata e di tutti i parametri di rete in `HotFolderManager`.
+  - **Suite di Test (`tests/test_net_print.py` & `tests/test_send_to_rip_ui.py`):**
+    - 8 test per il motore di rete (assenza rigorosa di import Qt, generazione PJL, probe con server mock, invio RAW socket e LPR).
+    - 4 test di integrazione UI per persistenza impostazioni, toggle protocolli e feedback visivo della sonda.
+
 ## [0.4.9] - 2026-10-28
 
 - **Ispezione Colore, Profili ICC, OutputIntents e Prestampa nel Dialogo Ispettore PDF:**
