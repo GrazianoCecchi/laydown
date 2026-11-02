@@ -4,7 +4,7 @@ Everything a person (or agent) needs to pick this project up. For *why* the code
 way it is, read `AGENTS.md` then `docs/ai/START_HERE.md`; this file is the operational state —
 what's shipped, what's pending, and how to move each piece forward.
 
-_Last updated: 2026-10-15, at version 0.4.7._
+_Last updated: 2026-11-02, at version 0.4.10._
 
 ---
 
@@ -13,7 +13,7 @@ _Last updated: 2026-10-15, at version 0.4.7._
 | Thing | State |
 |-------|-------|
 | **What it is** | Laydown — a desktop app for **PDF imposition** (laying source pages onto press sheets). Python + PyQt6 UI + PyMuPDF engine. |
-| **Current version** | **0.4.7** (`laydown/__init__.py` is the single source of truth) |
+| **Current version** | **0.4.10** (`laydown/__init__.py` is the single source of truth) |
 | **Repo** | <https://github.com/danielmevit/laydown> (default branch `main`; work on `dev`, merge to `main` on release) |
 | **Website** | <https://danielmevit.github.io/laydown/> — Astro, in `site/`, deploys from `main` |
 | **GitHub releases** | **0.4.7**, all platforms — Windows (MSIX + portable), macOS (arm64 + Intel), Linux x86_64 |

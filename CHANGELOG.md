@@ -4,7 +4,7 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
-## [0.4.9] - 2026-10-30
+## [0.4.10] - 2026-11-02
 
 - **Invio Diretto a Stampante di Rete (Ricoh Direct Print / RAW Socket 9100 / LPR) e RIP Dispatch:**
   - **Motore di Trasmissione di Rete Headless (`laydown/engine/net_print.py`):**
@@ -27,8 +27,6 @@ All notable changes to Laydown (formerly PressReady) are documented here.
   - **Suite di Test (`tests/test_net_print.py` & `tests/test_send_to_rip_ui.py`):**
     - 8 test per il motore di rete (assenza rigorosa di import Qt, generazione PJL, probe con server mock, invio RAW socket e LPR).
     - 4 test di integrazione UI per persistenza impostazioni, toggle protocolli e feedback visivo della sonda.
-
-## [0.4.9] - 2026-10-28
 
 - **Ispezione Colore, Profili ICC, OutputIntents e Prestampa nel Dialogo Ispettore PDF:**
   - **Motore di Ispezione Colore Headless (`laydown/engine/inspector.py`):**
@@ -85,6 +83,8 @@ All notable changes to Laydown (formerly PressReady) are documented here.
   - **Suite di Test (`tests/test_sheet_formats.py` & `tests/test_sheet_presets.py`):**
     - Test di isolamento con fixture temporanea per salvare, caricare, eliminare ed esportare formati JSON.
     - Verifica di corretta imposizione end-to-end con formato personalizzato generato a misura esatta.
+
+## [0.4.9] - 2026-10-28
 
 - **Gestione Completa delle Preimpostazioni (Catalogo Unico JSON, ComboBox Rapida nella Toolbar e Dialog Dedicati):**
   - **Archiviazione centralizzata in unico file JSON (`laydown/ui/presets.py`):** introdotto il nuovo `PresetManager` per la gestione di tutte le preimpostazioni in un unico file `presets.json` archiviato nella cartella dati dell'applicazione (`AppDataLocation` / `~/.laydown`), eliminando la necessità di cercare e gestire singoli file sparsi.

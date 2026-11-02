@@ -1,6 +1,6 @@
 ; Inno Setup script for Laydown
 #ifndef MyAppVersion
-#define MyAppVersion "0.4.9"
+#define MyAppVersion "0.4.10"
 #endif
 
 #define MyAppName "Laydown"
@@ -28,6 +28,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequiredOverridesAllowed=commandline dialog
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
@@ -35,6 +37,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[InstallDelete]
+; Elimina la cartella _internal delle versioni precedenti per evitare file obsoleti o in conflitto
+Type: filesandordirs; Name: "{app}\_internal"
 
 [Files]
 Source: "..\..\dist\Laydown\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
