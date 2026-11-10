@@ -1,5 +1,6 @@
 """
-Dialog for composing and merging multiple PDF documents with fine-grained page sequence selection.
+Dialog for composing and merging multiple PDF documents with fine-grained page sequence selection
+and smart geometry normalization (Clean View vs Prepress Print & Multi-format handling).
 """
 
 from __future__ import annotations
@@ -14,7 +15,11 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
+    QCheckBox,
+    QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -24,6 +29,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QRadioButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -31,13 +37,18 @@ from PyQt6.QtWidgets import (
 )
 
 from laydown.engine.composer import (
+    ComposerIntent,
+    CompositionGeometryConfig,
+    GeometryDiagnosis,
     PageSpec,
     ParseResult,
     SourceDocInfo,
     compose_pdf,
+    diagnose_sources_geometry,
     inspect_source_pdf,
     parse_page_sequence,
 )
+from laydown.engine.data_model import SHEET_PRESETS_MM
 from laydown.ui import theme as t
 from laydown.ui.icons import lucide
 
@@ -58,7 +69,8 @@ def _letter_id(index: int) -> str:
 class ComposerDialog(QDialog):
     """
     Dialog allowing users to load multiple PDF files, map them to letters (A, B, C...),
-    and define an exact composite page sequence (e.g. 'A1-10, B2, A11-12, C1-4').
+    define an exact composite page sequence (e.g. 'A1-10, B2, A11-12, C1-4'),
+    and choose output intent (Clean View vs Prepress Print & Mixed format scaling).
     """
 
     def __init__(
@@ -68,8 +80,8 @@ class ComposerDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle("Componi e unisci PDF — Laydown")
-        self.setMinimumSize(780, 620)
-        self.resize(850, 680)
+        self.setMinimumSize(820, 680)
+        self.resize(890, 740)
         self.setAcceptDrops(True)
 
         self._sources: List[SourceDocInfo] = []
@@ -86,7 +98,7 @@ class ComposerDialog(QDialog):
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(t.SPACE_5, t.SPACE_5, t.SPACE_5, t.SPACE_5)
-        root.setSpacing(t.SPACE_4)
+        root.setSpacing(t.SPACE_3)
 
         # ── Header ──
         header_layout = QVBoxLayout()
@@ -98,7 +110,7 @@ class ComposerDialog(QDialog):
 
         desc = QLabel(
             "Unisci più file PDF ed estrai pagine specifiche componendo la sequenza desiderata "
-            "(es. A1-10, B2, A11-12, C1-4). Trascina i file PDF nella tabella sottostante o usa 'Aggiungi PDF'."
+            "(es. A1-10, B2, A11-12, C1-4). Rileva e gestisce automaticamente formati differenti e abbondanze per il taglio."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(f"font-size: {t.TEXT_SM}px; color: {t.FG_MUTED};")
@@ -118,7 +130,7 @@ class ComposerDialog(QDialog):
         tbl_row.setSpacing(t.SPACE_3)
 
         self._src_table = QTableWidget(0, 5)
-        self._src_table.setHorizontalHeaderLabels(["ID", "File", "Pagine", "Formato", "Percorso"])
+        self._src_table.setHorizontalHeaderLabels(["ID", "File", "Pagine", "Formato & Abbondanza", "Percorso"])
         self._src_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._src_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._src_table.verticalHeader().setVisible(False)
@@ -126,7 +138,7 @@ class ComposerDialog(QDialog):
         self._src_table.setStyleSheet(
             f"QTableWidget {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER}; "
             f"               border-radius: {t.RADIUS_MD}px; gridline-color: transparent; }}"
-            f"QTableWidget::item {{ padding: 6px 8px; color: {t.FG}; }}"
+            f"QTableWidget::item {{ padding: 5px 8px; color: {t.FG}; }}"
             f"QTableWidget::item:selected {{ background: {t.SELECTED_WASH}; color: {t.FG}; }}"
             f"QHeaderView::section {{ background: {t.RAISED}; color: {t.FG_MUTED}; "
             f"                        font-size: {t.TEXT_XS}px; font-weight: 600; "
@@ -137,9 +149,10 @@ class ComposerDialog(QDialog):
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        self._src_table.setColumnWidth(1, 200)
+        self._src_table.setColumnWidth(1, 190)
+        self._src_table.setColumnWidth(3, 230)
 
         self._src_table.itemSelectionChanged.connect(self._update_button_states)
         tbl_row.addWidget(self._src_table, 1)
@@ -182,7 +195,116 @@ class ComposerDialog(QDialog):
         btn_col.addStretch(1)
         tbl_row.addLayout(btn_col)
         sources_box.addLayout(tbl_row)
+
+        # ── Geometry Diagnosis Alert Banner ──
+        self._diag_frame = QFrame()
+        self._diag_frame.setStyleSheet(
+            f"QFrame {{ background: {t.mix(t.ACCENT, t.SURFACE, 0.14)}; "
+            f"          border: 1px solid {t.mix(t.ACCENT, t.BORDER, 0.5)}; "
+            f"          border-radius: {t.RADIUS_SM}px; padding: 4px 8px; }}"
+        )
+        diag_layout = QHBoxLayout(self._diag_frame)
+        diag_layout.setContentsMargins(6, 4, 6, 4)
+        diag_layout.setSpacing(t.SPACE_2)
+        self._diag_label = QLabel()
+        self._diag_label.setWordWrap(True)
+        self._diag_label.setStyleSheet(f"font-size: {t.TEXT_XS}px; color: {t.FG};")
+        diag_layout.addWidget(self._diag_label, 1)
+        self._diag_frame.setVisible(False)
+        sources_box.addWidget(self._diag_frame)
+
         root.addLayout(sources_box)
+
+        # ── Destination Intent & Geometry Options ──
+        geo_box = QFrame()
+        geo_box.setStyleSheet(
+            f"QFrame {{ background: {t.SURFACE}; border: 1px solid {t.BORDER}; "
+            f"          border-radius: {t.RADIUS_MD}px; padding: 8px 10px; }}"
+        )
+        geo_layout = QVBoxLayout(geo_box)
+        geo_layout.setContentsMargins(8, 6, 8, 6)
+        geo_layout.setSpacing(t.SPACE_2)
+
+        geo_header_row = QHBoxLayout()
+        geo_title = QLabel("Destinazione e trattamento formato:")
+        geo_title.setStyleSheet(f"font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.FG};")
+        geo_header_row.addWidget(geo_title)
+        geo_header_row.addStretch(1)
+        geo_layout.addLayout(geo_header_row)
+
+        # Radio button intent choices
+        self._intent_group = QButtonGroup(self)
+        intent_row = QHBoxLayout()
+        intent_row.setSpacing(t.SPACE_4)
+
+        self._radio_view = QRadioButton("Visualizzazione / Lettura")
+        self._radio_view.setChecked(True)
+        self._radio_view.setToolTip("Rifila al formato finito netto (TrimBox), rimuovendo margini di abbondanza e crocini.")
+        self._radio_view.setStyleSheet(f"QRadioButton {{ color: {t.FG}; font-size: {t.TEXT_SM}px; font-weight: 600; }}")
+        self._intent_group.addButton(self._radio_view, 1)
+        intent_row.addWidget(self._radio_view)
+
+        self._radio_print = QRadioButton("Stampa & Imposizione")
+        self._radio_print.setToolTip("Garantisce TrimBox e BleedBox tipografici uniformi su tutte le pagine.")
+        self._radio_print.setStyleSheet(f"QRadioButton {{ color: {t.FG}; font-size: {t.TEXT_SM}px; font-weight: 600; }}")
+        self._intent_group.addButton(self._radio_print, 2)
+        intent_row.addWidget(self._radio_print)
+
+        self._radio_preserve = QRadioButton("Originale invariato")
+        self._radio_preserve.setToolTip("Mantiene ogni pagina esattamente com'è nel file sorgente, senza alterare i box.")
+        self._radio_preserve.setStyleSheet(f"QRadioButton {{ color: {t.FG}; font-size: {t.TEXT_SM}px; }}")
+        self._intent_group.addButton(self._radio_preserve, 3)
+        intent_row.addWidget(self._radio_preserve)
+
+        intent_row.addStretch(1)
+        geo_layout.addLayout(intent_row)
+
+        # Options sub-row: bleed margin spinbox & common format scaling
+        opts_row = QHBoxLayout()
+        opts_row.setSpacing(t.SPACE_4)
+
+        # Bleed margin config (active in PRINT mode)
+        self._bleed_frame = QWidget()
+        b_lay = QHBoxLayout(self._bleed_frame)
+        b_lay.setContentsMargins(0, 0, 0, 0)
+        b_lay.setSpacing(t.SPACE_1)
+        b_lbl = QLabel("Abbondanza stampa:")
+        b_lbl.setStyleSheet(f"font-size: {t.TEXT_XS}px; color: {t.FG_MUTED};")
+        b_lay.addWidget(b_lbl)
+        self._spin_bleed = QDoubleSpinBox()
+        self._spin_bleed.setRange(0.5, 15.0)
+        self._spin_bleed.setSingleStep(0.5)
+        self._spin_bleed.setValue(3.0)
+        self._spin_bleed.setSuffix(" mm")
+        self._spin_bleed.setFixedWidth(75)
+        b_lay.addWidget(self._spin_bleed)
+        self._bleed_frame.setEnabled(False)
+        opts_row.addWidget(self._bleed_frame)
+
+        # Separator line
+        sep = QFrame()
+        sep.setFixedSize(1, 16)
+        sep.setStyleSheet(f"background: {t.BORDER};")
+        opts_row.addWidget(sep)
+
+        # Scale to common format option
+        self._chk_scale_common = QCheckBox("Scala e adatta tutte le pagine a un formato comune:")
+        self._chk_scale_common.setToolTip("Se disattivato, ogni documento mantiene il suo formato originale (es. A4 resta A4, A3 resta A3).")
+        self._chk_scale_common.setStyleSheet(f"QCheckBox {{ font-size: {t.TEXT_XS}px; color: {t.FG}; }}")
+        opts_row.addWidget(self._chk_scale_common)
+
+        self._combo_common_fmt = QComboBox()
+        self._combo_common_fmt.addItems(["A4", "A3", "A5", "SRA3", "B4", "Letter"])
+        self._combo_common_fmt.setFixedWidth(80)
+        self._combo_common_fmt.setEnabled(False)
+        opts_row.addWidget(self._combo_common_fmt)
+
+        opts_row.addStretch(1)
+        geo_layout.addLayout(opts_row)
+        root.addWidget(geo_box)
+
+        self._intent_group.buttonToggled.connect(self._on_intent_toggled)
+        self._chk_scale_common.toggled.connect(lambda chk: self._combo_common_fmt.setEnabled(chk))
 
         # ── Sequence Input Section ──
         seq_box = QVBoxLayout()
@@ -194,7 +316,6 @@ class ComposerDialog(QDialog):
         seq_lbl_row.addWidget(seq_lbl)
         seq_lbl_row.addStretch(1)
 
-        # Quick action links/buttons
         self._btn_all_order = QPushButton("Tutti i file in ordine")
         self._btn_all_order.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_all_order.setStyleSheet(
@@ -223,7 +344,7 @@ class ComposerDialog(QDialog):
         self._seq_input.setPlaceholderText("Es. A1-10, B2, A11-12, C1-4   (A = tutto il file A; A5- = da pag 5 alla fine; blank = vuota)")
         self._seq_input.setStyleSheet(
             f"QLineEdit {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER}; "
-            f"             border-radius: {t.RADIUS_MD}px; padding: 8px 10px; "
+            f"             border-radius: {t.RADIUS_MD}px; padding: 7px 10px; "
             f"             font-size: {t.TEXT_SM}px; font-family: monospace; color: {t.FG}; }}"
             f"QLineEdit:focus {{ border-color: {t.ACCENT}; }}"
         )
@@ -234,10 +355,10 @@ class ComposerDialog(QDialog):
         self._status_frame = QFrame()
         self._status_frame.setStyleSheet(
             f"QFrame {{ background: {t.RAISED}; border: 1px solid {t.BORDER_SOFT}; "
-            f"          border-radius: {t.RADIUS_SM}px; padding: 6px 10px; }}"
+            f"          border-radius: {t.RADIUS_SM}px; padding: 5px 10px; }}"
         )
         status_row = QHBoxLayout(self._status_frame)
-        status_row.setContentsMargins(8, 6, 8, 6)
+        status_row.setContentsMargins(8, 5, 8, 5)
         status_row.setSpacing(t.SPACE_2)
 
         self._status_label = QLabel("Aggiungi i file PDF sorgente per iniziare.")
@@ -264,12 +385,12 @@ class ComposerDialog(QDialog):
         self._preview_table.verticalHeader().setVisible(False)
         self._preview_table.setShowGrid(False)
         self._preview_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self._preview_table.setMaximumHeight(140)
+        self._preview_table.setMaximumHeight(130)
         self._preview_table.setVisible(False)
         self._preview_table.setStyleSheet(
             f"QTableWidget {{ background: {t.INPUT_BG}; border: 1px solid {t.BORDER}; "
             f"               border-radius: {t.RADIUS_SM}px; font-size: {t.TEXT_XS}px; }}"
-            f"QTableWidget::item {{ padding: 4px 6px; color: {t.FG}; }}"
+            f"QTableWidget::item {{ padding: 3px 6px; color: {t.FG}; }}"
             f"QHeaderView::section {{ background: {t.RAISED}; color: {t.FG_MUTED}; "
             f"                        font-size: {t.TEXT_XS}px; font-weight: 600; "
             f"                        border: none; border-bottom: 1px solid {t.BORDER}; padding: 4px 6px; }}"
@@ -288,7 +409,7 @@ class ComposerDialog(QDialog):
         self._btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_cancel.setStyleSheet(
             f"QPushButton {{ background: {t.SURFACE}; border: 1px solid {t.BORDER}; "
-            f"               border-radius: {t.RADIUS_MD}px; padding: 8px 16px; "
+            f"               border-radius: {t.RADIUS_MD}px; padding: 7px 16px; "
             f"               font-size: {t.TEXT_SM}px; color: {t.FG}; }}"
             f"QPushButton:hover {{ background: {t.HOVER_WASH}; }}"
         )
@@ -302,7 +423,7 @@ class ComposerDialog(QDialog):
         self._btn_save_as.setEnabled(False)
         self._btn_save_as.setStyleSheet(
             f"QPushButton {{ background: {t.SURFACE}; border: 1px solid {t.BORDER}; "
-            f"               border-radius: {t.RADIUS_MD}px; padding: 8px 18px; "
+            f"               border-radius: {t.RADIUS_MD}px; padding: 7px 18px; "
             f"               font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.FG}; }}"
             f"QPushButton:hover:enabled {{ background: {t.HOVER_WASH}; }}"
             f"QPushButton:disabled {{ color: {t.FG_FAINT}; border-color: {t.BORDER_SOFT}; }}"
@@ -316,7 +437,7 @@ class ComposerDialog(QDialog):
         self._btn_open_in_laydown.setEnabled(False)
         self._btn_open_in_laydown.setStyleSheet(
             f"QPushButton {{ background: {t.ACCENT}; border: 1px solid {t.ACCENT}; "
-            f"               border-radius: {t.RADIUS_MD}px; padding: 8px 20px; "
+            f"               border-radius: {t.RADIUS_MD}px; padding: 7px 20px; "
             f"               font-size: {t.TEXT_SM}px; font-weight: 700; color: #FFFFFF; }}"
             f"QPushButton:hover:enabled {{ background: {t.ACCENT_HOVER}; border-color: {t.ACCENT_HOVER}; }}"
             f"QPushButton:pressed:enabled {{ background: {t.ACCENT_PRESS}; }}"
@@ -326,6 +447,14 @@ class ComposerDialog(QDialog):
         bottom_row.addWidget(self._btn_open_in_laydown)
 
         root.addLayout(bottom_row)
+
+    # ── Intent toggles ──
+
+    def _on_intent_toggled(self, button: QRadioButton, checked: bool):
+        if not checked:
+            return
+        is_print = self._radio_print.isChecked()
+        self._bleed_frame.setEnabled(is_print)
 
     # ── Drag and Drop ──
 
@@ -368,7 +497,6 @@ class ComposerDialog(QDialog):
             if abs_p in existing_paths:
                 continue
             try:
-                # Temporary ID, will be normalized by _reassign_source_ids()
                 info = inspect_source_pdf(abs_p, doc_id="TEMP")
                 self._sources.append(info)
                 existing_paths.add(abs_p)
@@ -384,7 +512,7 @@ class ComposerDialog(QDialog):
         if added_any:
             self._reassign_source_ids()
             self._rebuild_sources_table()
-            # If sequence input was empty, provide a convenient default: all documents
+            self._update_geometry_diagnosis()
             if not self._seq_input.text().strip():
                 default_expr = ", ".join(s.id for s in self._sources)
                 self._seq_input.setText(default_expr)
@@ -392,7 +520,6 @@ class ComposerDialog(QDialog):
                 self._validate_sequence()
 
     def _reassign_source_ids(self):
-        """Reassign consecutive letters A, B, C... to match the current order."""
         updated = []
         for i, src in enumerate(self._sources):
             letter = _letter_id(i)
@@ -401,8 +528,13 @@ class ComposerDialog(QDialog):
                     id=letter,
                     path=src.path,
                     page_count=src.page_count,
-                    first_page_width_mm=src.first_page_width_mm,
-                    first_page_height_mm=src.first_page_height_mm,
+                    media_width_mm=src.media_width_mm,
+                    media_height_mm=src.media_height_mm,
+                    trim_width_mm=src.trim_width_mm,
+                    trim_height_mm=src.trim_height_mm,
+                    has_bleed=src.has_bleed,
+                    bleed_margin_mm=src.bleed_margin_mm,
+                    format_name=src.format_name,
                     title=src.title,
                 )
             )
@@ -428,10 +560,13 @@ class ComposerDialog(QDialog):
             pg_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._src_table.setItem(row, 2, pg_item)
 
-            # Column 3: Format / dimensions
+            # Column 3: Format & Bleed details
             dim_item = QTableWidgetItem(src.dimensions_str)
-            dim_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            dim_item.setForeground(QColor(t.FG_MUTED))
+            dim_item.setToolTip(
+                f"Formato finito (TrimBox): {src.trim_width_mm:.1f} × {src.trim_height_mm:.1f} mm\n"
+                f"Formato lordo (MediaBox): {src.media_width_mm:.1f} × {src.media_height_mm:.1f} mm\n"
+                f"Abbondanza: {'Sì (+{:.1f} mm)'.format(src.bleed_margin_mm) if src.has_bleed else 'Nessuna'}"
+            )
             self._src_table.setItem(row, 3, dim_item)
 
             # Column 4: Full path
@@ -440,6 +575,14 @@ class ComposerDialog(QDialog):
             self._src_table.setItem(row, 4, p_item)
 
         self._update_button_states()
+
+    def _update_geometry_diagnosis(self):
+        diagnosis = diagnose_sources_geometry(self._sources)
+        if diagnosis.warning_message:
+            self._diag_label.setText(f"ℹ️ {diagnosis.warning_message}")
+            self._diag_frame.setVisible(True)
+        else:
+            self._diag_frame.setVisible(False)
 
     def _update_button_states(self):
         has_sources = len(self._sources) > 0
@@ -458,6 +601,7 @@ class ComposerDialog(QDialog):
             del self._sources[row]
             self._reassign_source_ids()
             self._rebuild_sources_table()
+            self._update_geometry_diagnosis()
             self._validate_sequence()
 
     def _on_move_up(self):
@@ -466,6 +610,7 @@ class ComposerDialog(QDialog):
             self._sources[row - 1], self._sources[row] = self._sources[row], self._sources[row - 1]
             self._reassign_source_ids()
             self._rebuild_sources_table()
+            self._update_geometry_diagnosis()
             self._src_table.selectRow(row - 1)
             self._validate_sequence()
 
@@ -475,6 +620,7 @@ class ComposerDialog(QDialog):
             self._sources[row + 1], self._sources[row] = self._sources[row], self._sources[row + 1]
             self._reassign_source_ids()
             self._rebuild_sources_table()
+            self._update_geometry_diagnosis()
             self._src_table.selectRow(row + 1)
             self._validate_sequence()
 
@@ -483,6 +629,7 @@ class ComposerDialog(QDialog):
             return
         self._sources.clear()
         self._rebuild_sources_table()
+        self._update_geometry_diagnosis()
         self._validate_sequence()
 
     # ── Sequence & Validation ──
@@ -512,7 +659,7 @@ class ComposerDialog(QDialog):
             self._current_parse_result = None
             self._status_frame.setStyleSheet(
                 f"QFrame {{ background: {t.RAISED}; border: 1px solid {t.BORDER_SOFT}; "
-                f"          border-radius: {t.RADIUS_SM}px; padding: 6px 10px; }}"
+                f"          border-radius: {t.RADIUS_SM}px; padding: 5px 10px; }}"
             )
             self._status_label.setText("Aggiungi i file PDF sorgente per iniziare.")
             self._status_label.setStyleSheet(f"font-size: {t.TEXT_SM}px; color: {t.FG_MUTED};")
@@ -525,7 +672,7 @@ class ComposerDialog(QDialog):
             self._current_parse_result = None
             self._status_frame.setStyleSheet(
                 f"QFrame {{ background: {t.RAISED}; border: 1px solid {t.BORDER_SOFT}; "
-                f"          border-radius: {t.RADIUS_SM}px; padding: 6px 10px; }}"
+                f"          border-radius: {t.RADIUS_SM}px; padding: 5px 10px; }}"
             )
             self._status_label.setText("Inserisci la sequenza desiderata delle pagine (es. A1-10, B2, A11-12, C1-4).")
             self._status_label.setStyleSheet(f"font-size: {t.TEXT_SM}px; color: {t.FG_MUTED};")
@@ -546,7 +693,6 @@ class ComposerDialog(QDialog):
                 self._update_preview_table([])
                 return
 
-            # Summary breakdown
             parts = []
             for doc_id, count in result.summary_by_source.items():
                 if doc_id == "BLANK":
@@ -560,7 +706,7 @@ class ComposerDialog(QDialog):
             self._status_frame.setStyleSheet(
                 f"QFrame {{ background: {t.mix(t.ACCENT, t.SURFACE, 0.12)}; "
                 f"          border: 1px solid {t.mix(t.ACCENT, t.BORDER, 0.4)}; "
-                f"          border-radius: {t.RADIUS_SM}px; padding: 6px 10px; }}"
+                f"          border-radius: {t.RADIUS_SM}px; padding: 5px 10px; }}"
             )
             self._status_label.setText(msg)
             self._status_label.setStyleSheet(f"font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.ACCENT};")
@@ -571,7 +717,7 @@ class ComposerDialog(QDialog):
             self._status_frame.setStyleSheet(
                 f"QFrame {{ background: {t.mix(t.DESTRUCTIVE, t.SURFACE, 0.15)}; "
                 f"          border: 1px solid {t.mix(t.DESTRUCTIVE, t.BORDER, 0.5)}; "
-                f"          border-radius: {t.RADIUS_SM}px; padding: 6px 10px; }}"
+                f"          border-radius: {t.RADIUS_SM}px; padding: 5px 10px; }}"
             )
             self._status_label.setText(f"⚠️ {result.error_message}")
             self._status_label.setStyleSheet(f"font-size: {t.TEXT_SM}px; font-weight: 600; color: {t.DESTRUCTIVE};")
@@ -588,12 +734,10 @@ class ComposerDialog(QDialog):
         doc_names = {s.id: s.filename for s in self._sources}
 
         for row, spec in enumerate(specs):
-            # Col 0: Output page number (1-based)
             p_out = QTableWidgetItem(f"Pagina {row + 1}")
             p_out.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._preview_table.setItem(row, 0, p_out)
 
-            # Col 1: Source document
             if spec.is_blank:
                 doc_item = QTableWidgetItem("[Pagina vuota]")
                 doc_item.setForeground(QColor(t.FG_MUTED))
@@ -602,7 +746,6 @@ class ComposerDialog(QDialog):
                 doc_item = QTableWidgetItem(f"[{spec.source_id}] {fn}")
             self._preview_table.setItem(row, 1, doc_item)
 
-            # Col 2: Original page number
             if spec.is_blank:
                 orig_item = QTableWidgetItem("—")
                 orig_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -614,16 +757,34 @@ class ComposerDialog(QDialog):
 
     # ── PDF Generation Actions ──
 
+    def _get_geometry_config(self) -> CompositionGeometryConfig:
+        if self._radio_view.isChecked():
+            intent = ComposerIntent.VIEW
+        elif self._radio_print.isChecked():
+            intent = ComposerIntent.PRINT
+        else:
+            intent = ComposerIntent.PRESERVE
+
+        return CompositionGeometryConfig(
+            intent=intent,
+            bleed_mm=self._spin_bleed.value(),
+            scale_to_common_format=self._chk_scale_common.isChecked(),
+            common_format_name=self._combo_common_fmt.currentText() if self._chk_scale_common.isChecked() else None,
+        )
+
     def _compose_to_file(self, target_path: str) -> bool:
         if not self._current_parse_result or not self._current_parse_result.is_valid:
             return False
 
         sources_map = {s.id: s.path for s in self._sources}
+        geo_cfg = self._get_geometry_config()
+
         try:
             doc = compose_pdf(
                 sources=sources_map,
                 page_specs=self._current_parse_result.page_specs,
                 output_path=target_path,
+                geometry_config=geo_cfg,
             )
             doc.close()
             return True
@@ -664,7 +825,6 @@ class ComposerDialog(QDialog):
             self.accept()
 
     def _on_open_in_laydown(self):
-        # Create a temporary file to load into Laydown
         fd, temp_path = tempfile.mkstemp(prefix="laydown_composed_", suffix=".pdf")
         os.close(fd)
 

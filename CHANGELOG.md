@@ -17,7 +17,14 @@ All notable changes to Laydown (formerly PressReady) are documented here.
         - Intervalli in ordine inverso: `A10-1`, `B4-2`.
         - Pagine bianche di riempimento: `blank`, `_`, `vuota` o `bianca` (con preservazione delle dimensioni dell'ultima pagina o della pagina predefinita).
         - Validazione in tempo reale e segnalazione dettagliata degli errori (lettera documento non trovata, numero di pagina eccedente il totale del file, numeri minori di 1, token malformati).
-      - `compose_pdf`: assemblaggio vettoriale ad alta fedeltà delle pagine selezionate che preserva integralmente orientamenti, contenuti vettoriali, box di pagina (`TrimBox`, `BleedBox`, `CropBox`, `MediaBox`) e annotazioni.
+  - **Gestione Geometria Intelligente, Formati Eterogenei e Abbondanze Tipografiche:**
+    - Riconoscimento automatico del formato foglio (A4, A3, A5, SRA3, B4, ecc.) e distinzione tra formato finito (`TrimBox`) e formato con abbondanza al vivo (`BleedBox` / `MediaBox`).
+    - Diagnosi automatica della geometria dei file caricati (`diagnose_sources_geometry`) con avviso integrato per formati misti o abbondanze disomogenee.
+    - Selezione dell'Intento di Destinazione (`ComposerIntent`):
+      - **Visualizzazione / Lettura (`VIEW`):** crop al formato finito netto (`TrimBox`), eliminando margini di bleed o crocini per una visualizzazione a schermo omogenea e pulita.
+      - **Stampa & Imposizione (`PRINT`):** calibrazione ed espansione del foglio con `TrimBox` e `BleedBox` tipografici uniformi (abbondanza configurabile, default 3.0 mm).
+      - **Originale invariato (`PRESERVE`):** conservazione as-is della geometria dei file originali.
+    - Supporto per formati eterogenei: possibilità di preservare le dimensioni originali di ciascun documento (es. A4 resta A4, A3 resta A3) oppure di scalare e adattare proporzionalmente tutte le pagine a un formato comune prescelto (es. tutto ad A4).
   - **Interfaccia Grafica Dedicata (`laydown/ui/composer_dialog.py`):**
     - Nuova finestra di dialogo conforme al design system scuro Toolcraft di Laydown:
       - Tabella dei documenti sorgente con lettere badge `[A]`, `[B]`, `[C]`, nome file, conteggio pagine, dimensioni e percorso completo.

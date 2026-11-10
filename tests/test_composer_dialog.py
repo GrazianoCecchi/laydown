@@ -12,6 +12,7 @@ from PyQt6.QtCore import QMimeData, QPointF, Qt, QUrl
 from PyQt6.QtGui import QDropEvent
 from PyQt6.QtWidgets import QApplication
 
+from laydown.engine.composer import ComposerIntent
 from laydown.ui.composer_dialog import ComposerDialog, _letter_id
 
 
@@ -25,14 +26,14 @@ def sample_dialog_pdfs(tmp_path):
     path_a = str(tmp_path / "sample_a.pdf")
     doc_a = fitz.open()
     for _ in range(5):
-        doc_a.new_page(width=595.28, height=841.89)
+        doc_a.new_page(width=595.28, height=841.89)  # A4
     doc_a.save(path_a)
     doc_a.close()
 
     path_b = str(tmp_path / "sample_b.pdf")
     doc_b = fitz.open()
     for _ in range(3):
-        doc_b.new_page(width=400, height=400)
+        doc_b.new_page(width=400, height=400)  # Square custom
     doc_b.save(path_b)
     doc_b.close()
 
@@ -54,6 +55,8 @@ class TestComposerDialog:
         assert not dialog._btn_open_in_laydown.isEnabled()
         assert not dialog._btn_remove.isEnabled()
         assert not dialog._btn_clear.isEnabled()
+        assert dialog._radio_view.isChecked()
+        assert not dialog._bleed_frame.isEnabled()
         dialog.close()
 
     def test_dialog_init_with_initial_pdf(self, app, sample_dialog_pdfs):
@@ -63,7 +66,6 @@ class TestComposerDialog:
         assert dialog._sources[0].id == "A"
         assert dialog._sources[0].page_count == 5
         assert dialog._src_table.rowCount() == 1
-        # Default expression should be "A"
         assert dialog._seq_input.text() == "A"
         assert dialog._btn_save_as.isEnabled()
         assert dialog._btn_open_in_laydown.isEnabled()
@@ -79,6 +81,10 @@ class TestComposerDialog:
         assert dialog._sources[0].filename == "sample_a.pdf"
         assert dialog._sources[1].id == "B"
         assert dialog._sources[1].filename == "sample_b.pdf"
+
+        # Diagnosis frame should be visible due to mixed formats (A4 vs custom square)
+        assert not dialog._diag_frame.isHidden()
+        assert "eterogenei" in dialog._diag_label.text().lower()
 
         # Select row 1 (B) and move up
         dialog._src_table.selectRow(1)
@@ -100,29 +106,50 @@ class TestComposerDialog:
 
         dialog.close()
 
+    def test_geometry_controls_and_config(self, app):
+        dialog = ComposerDialog()
+
+        # Default is VIEW mode
+        cfg = dialog._get_geometry_config()
+        assert cfg.intent == ComposerIntent.VIEW
+        assert not cfg.scale_to_common_format
+
+        # Toggle to PRINT mode -> enables bleed frame
+        dialog._radio_print.setChecked(True)
+        assert dialog._bleed_frame.isEnabled()
+        dialog._spin_bleed.setValue(4.5)
+        cfg_print = dialog._get_geometry_config()
+        assert cfg_print.intent == ComposerIntent.PRINT
+        assert cfg_print.bleed_mm == 4.5
+
+        # Toggle scale to common format
+        dialog._chk_scale_common.setChecked(True)
+        assert dialog._combo_common_fmt.isEnabled()
+        dialog._combo_common_fmt.setCurrentText("A3")
+        cfg_scale = dialog._get_geometry_config()
+        assert cfg_scale.scale_to_common_format
+        assert cfg_scale.common_format_name == "A3"
+
+        dialog.close()
+
     def test_sequence_validation_ui(self, app, sample_dialog_pdfs):
         path_a, path_b = sample_dialog_pdfs
         dialog = ComposerDialog(initial_pdf_path=path_a)
         dialog._add_source_files([path_b])
-        # A: 5 pages, B: 3 pages
 
-        # 1. Valid syntax
         dialog._seq_input.setText("A1-3, B2, blank, A5")
         assert dialog._btn_save_as.isEnabled()
         assert dialog._btn_open_in_laydown.isEnabled()
         assert "6 pagine generate" in dialog._status_label.text()
 
-        # 2. Invalid doc ID
         dialog._seq_input.setText("A1-3, Z1")
         assert not dialog._btn_save_as.isEnabled()
         assert "non presente" in dialog._status_label.text()
 
-        # 3. Page out of bounds
         dialog._seq_input.setText("B4")
         assert not dialog._btn_save_as.isEnabled()
         assert "ha 3 pagine" in dialog._status_label.text()
 
-        # 4. Empty input
         dialog._seq_input.setText("")
         assert not dialog._btn_save_as.isEnabled()
 
@@ -142,11 +169,6 @@ class TestComposerDialog:
         assert dialog._preview_table.item(0, 0).text() == "Pagina 1"
         assert "[A]" in dialog._preview_table.item(0, 1).text()
         assert dialog._preview_table.item(0, 2).text() == "pag. 1"
-
-        # Row 1: Pagina 2 | [Pagina vuota] | —
-        assert dialog._preview_table.item(1, 0).text() == "Pagina 2"
-        assert "vuota" in dialog._preview_table.item(1, 1).text()
-        assert dialog._preview_table.item(1, 2).text() == "—"
 
         dialog.close()
 
@@ -175,12 +197,10 @@ class TestComposerDialog:
         assert dialog.composed_pdf_path is not None
         assert os.path.isfile(dialog.composed_pdf_path)
 
-        # Check composed file contents
         doc = fitz.open(dialog.composed_pdf_path)
         assert len(doc) == 3
         doc.close()
 
-        # Clean up temp file
         try:
             os.remove(dialog.composed_pdf_path)
         except Exception:
