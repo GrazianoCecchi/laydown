@@ -303,6 +303,11 @@ class MainWindow(QMainWindow):
                                     shortcut=QKeySequence("Ctrl+I"),
                                     enabled=False, triggered=self._on_inspect_pdf)
         file_menu.addAction(self._act_inspect)
+
+        self._act_compose = QAction(mi("layers"), "&Componi e unisci PDF…", self,
+                                    shortcut=QKeySequence("Ctrl+Shift+M"),
+                                    triggered=self._on_compose_pdf)
+        file_menu.addAction(self._act_compose)
         file_menu.addSeparator()
 
         self._act_generate = QAction(mi("generate"), "&Genera PDF", self,
@@ -458,6 +463,10 @@ class MainWindow(QMainWindow):
         self._btn_inspect.setEnabled(False)
         self._btn_inspect.clicked.connect(self._on_inspect_pdf)
         row.addWidget(self._btn_inspect)
+
+        self._btn_compose = _tool_btn(lucide("layers"), "Componi e unisci PDF (Ctrl+Shift+M)")
+        self._btn_compose.clicked.connect(self._on_compose_pdf)
+        row.addWidget(self._btn_compose)
 
         self._btn_margins = _tool_btn(
             lucide("printable_area"),
@@ -890,6 +899,14 @@ class MainWindow(QMainWindow):
         from laydown.ui.inspector_dialog import PdfInspectorDialog
         dialog = PdfInspectorDialog(self._source_doc, self._source_path, self)
         dialog.exec()
+
+    def _on_compose_pdf(self):
+        from laydown.ui.composer_dialog import ComposerDialog
+        initial_path = self._source_path if (self._source_path and os.path.isfile(self._source_path)) else None
+        dialog = ComposerDialog(initial_pdf_path=initial_path, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            if dialog.open_in_laydown_requested and dialog.composed_pdf_path:
+                self.load_pdf(dialog.composed_pdf_path)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         urls = event.mimeData().urls() if event.mimeData().hasUrls() else []

@@ -4,6 +4,41 @@ All notable changes to Laydown (formerly PressReady) are documented here.
 
 ---
 
+## [0.4.11] - 2026-11-10
+
+- **Composizione e Unione di PDF (PDF Composer & Merger):**
+  - **Motore di Composizione Headless (`laydown/engine/composer.py`):**
+    - Nuovo modulo 100% Qt-free per l'ispezione, validazione e assemblaggio di pagine da più documenti PDF con PyMuPDF (`fitz`):
+      - `inspect_source_pdf`: estrazione rapida di metadati, conteggio pagine e dimensioni fisiche della prima pagina (in millimetri e punti tipografici).
+      - `parse_page_sequence`: parser avanzato e robusto per espressioni di sequenza pagina, con supporto per:
+        - Sintassi classica: `A1-10, B2, A11-12, C1-4` (con separatori a virgola, punto e virgola o spazio).
+        - Interi documenti con la sola lettera: `A`, `B` (tutte le pagine del documento).
+        - Intervalli aperti: `A5-` (da pagina 5 alla fine), `A-4` (da inizio a pagina 4), `A-` (intero documento).
+        - Intervalli in ordine inverso: `A10-1`, `B4-2`.
+        - Pagine bianche di riempimento: `blank`, `_`, `vuota` o `bianca` (con preservazione delle dimensioni dell'ultima pagina o della pagina predefinita).
+        - Validazione in tempo reale e segnalazione dettagliata degli errori (lettera documento non trovata, numero di pagina eccedente il totale del file, numeri minori di 1, token malformati).
+      - `compose_pdf`: assemblaggio vettoriale ad alta fedeltà delle pagine selezionate che preserva integralmente orientamenti, contenuti vettoriali, box di pagina (`TrimBox`, `BleedBox`, `CropBox`, `MediaBox`) e annotazioni.
+  - **Interfaccia Grafica Dedicata (`laydown/ui/composer_dialog.py`):**
+    - Nuova finestra di dialogo conforme al design system scuro Toolcraft di Laydown:
+      - Tabella dei documenti sorgente con lettere badge `[A]`, `[B]`, `[C]`, nome file, conteggio pagine, dimensioni e percorso completo.
+      - Supporto al **Drag & Drop** diretto dei file PDF nella tabella o nella finestra di dialogo.
+      - Azioni di gestione sorgenti: *Aggiungi PDF…*, *Rimuovi*, *Sposta su*, *Sposta giù* (con ricalcolo e riassegnazione immediata delle lettere) e *Svuota*.
+      - Se un PDF è già aperto nella finestra principale di Laydown all'apertura del dialogo, viene pre-caricato automaticamente come documento `[A]`.
+      - Campo di inserimento sequenza con pulsanti di scorciatoia (*Tutti i file in ordine*, *+ Pagina vuota*).
+      - Barra di stato e validazione interattiva: feedback visivo immediato (verde/accento per sequenza valida con conteggio totale pagine e dettaglio per sorgente, rosso per errori di digitazione o pagine fuori limite).
+      - Tabella di anteprima sequenza espandibile/collassabile per ispezionare singolarmente ogni pagina di output prima della generazione.
+      - Doppio canale di esportazione: *Salva PDF con nome…* ed esportazione con caricamento immediato nell'area di lavoro con *Apri in Laydown*.
+  - **Integrazione nell'Applicazione Principale (`laydown/ui/main_window.py`):**
+    - Aggiunta della voce di menu `&Componi e unisci PDF…` nel menu `File` (scorciatoia da tastiera `Ctrl+Shift+M`).
+    - Aggiunta del pulsante dedicato con icona `layers` nella barra degli strumenti principale.
+  - **Nuove Icone Lucide (`laydown/ui/icons.py`):**
+    - Registrazione delle geometrie SVG Lucide per `layers` e `merge`.
+  - **Suite di Test (`tests/test_composer.py` & `tests/test_composer_dialog.py`):**
+    - 18 test per l'engine (parsing, intervalli aperti/inversi, pagine vuote, gestione errori, assemblaggio reale e conservazione geometrie).
+    - 9 test per l'interfaccia utente (inizializzazione, aggiunta e riordino sorgenti, validazione sequenza, tabella anteprima, azione Apri in Laydown, wiring menu e toolbar).
+
+---
+
 ## [0.4.10] - 2026-11-02
 
 - **Invio Diretto a Stampante di Rete (Ricoh Direct Print / RAW Socket 9100 / LPR) e RIP Dispatch:**
