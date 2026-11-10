@@ -49,6 +49,7 @@ bigger is "later 0.4.x", not a new minor version.
 - **Repo hygiene** — the unrelated `framer-demo/` side-project moved out of the repo to `D:\Vibe Coding\FramerTest`.
 
 ## Done
+- **Composizione e Unione PDF (PDF Composer & Merger)** (2026-11-10) — assemblaggio multi-documento con sintassi espressiva per sequenze pagine (`A1-10, B2, A11-12, C1-4`), intervalli aperti e inversi, pagine bianche, validazione in tempo reale, anteprima tabellare e apertura diretta in Laydown.
 - **0.2.0** (2026-02-19) — four-tab UI, N-Up 2/4, saddle-stitch booklet, 6 mark types,
   vector imposition, multi-sheet preview, MSIX + portable ZIP.
 - **2026-07-14** — AGPL relicense; AI-project standard adopted (AGENTS.md, docs/ai/,
