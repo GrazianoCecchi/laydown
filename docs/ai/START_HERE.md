@@ -3,7 +3,7 @@
 ## What this is
 Laydown — a desktop app for **PDF imposition** (laying out source pages on press sheets
 for commercial printing). Python 3.10+, PyQt6 UI, PyMuPDF (fitz) engine. Runs on Windows,
-macOS and Linux. Current version **0.4.10**. License: AGPL-3.0-only.
+macOS and Linux. Current version **0.4.11**. License: AGPL-3.0-only.
 
 ## Operational state → `HANDOFF.md`
 For what's shipped and what's pending — GitHub releases (0.4.7, all platforms) and the
